@@ -12,6 +12,24 @@ const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
 
+// Trust proxy (needed when behind Nginx with HTTPS)
+app.set('trust proxy', true);
+
+// Shopify embedding headers
+app.use((req, res, next) => {
+  // Allow embedding inside Shopify Admin iframe
+  res.setHeader('X-Frame-Options', 'ALLOWALL'); 
+
+  // Allow only Shopify domains for security
+  res.setHeader(
+    'Content-Security-Policy',
+    "frame-ancestors 'self' https://*.myshopify.com"
+  );
+
+  next();
+});
+
+
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: false, // Disable for embedded app
