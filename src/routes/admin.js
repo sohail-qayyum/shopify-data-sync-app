@@ -17,6 +17,10 @@ router.get('/admin', (req, res) => {
     return res.status(400).send('Missing shop parameter');
   }
   
+  // Set headers to allow embedding
+  res.setHeader('Content-Security-Policy', "frame-ancestors https://*.myshopify.com https://admin.shopify.com");
+  res.removeHeader('X-Frame-Options');
+  
   // Serve embedded admin page
   res.send(`
     <!DOCTYPE html>

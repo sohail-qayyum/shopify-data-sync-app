@@ -15,30 +15,57 @@ const app = express();
 // Trust proxy (needed when behind Nginx with HTTPS)
 app.set('trust proxy', true);
 
-// Shopify embedding headers
+// IMPORTANT: Disable helmet for Shopify embedded app routes
+// Helmet's default settings block iframe embedding
 app.use((req, res, next) => {
-  // Allow embedding inside Shopify Admin iframe
-  res.setHeader('X-Frame-Options', 'ALLOWALL'); 
+  // Allow embedding in Shopify Admin iframe
+  if (req.path.startsWith('/admin') || req.path.startsWith('/auth')) {
+    // Don't use helmet for these routes
+    return next();
+  }
+  
+  // Use helmet for other routes
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false
+  })(req, res, next);
+});
 
-  // Allow only Shopify domains for security
+// Set proper headers for Shopify embedding
+app.use((req, res, next) => {
+  // Remove X-Frame-Options to allow embedding
+  res.removeHeader('X-Frame-Options');
+  
+  // Allow embedding from Shopify admin
   res.setHeader(
     'Content-Security-Policy',
-    "frame-ancestors 'self' https://*.myshopify.com"
+    "frame-ancestors https://*.myshopify.com https://admin.shopify.com"
   );
-
+  
   next();
 });
 
-
-// Security middleware
-app.use(helmet({
-  contentSecurityPolicy: false, // Disable for embedded app
-  crossOriginEmbedderPolicy: false
-}));
-
-// CORS configuration
+// CORS configuration - allow Shopify domains
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    // Allow requests from Shopify domains and your app domain
+    const allowedOrigins = [
+      config.app.url,
+      /https:\/\/.*\.myshopify\.com$/,
+      /https:\/\/admin\.shopify\.com$/
+    ];
+    
+    if (!origin) return callback(null, true);
+    
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (allowed instanceof RegExp) {
+        return allowed.test(origin);
+      }
+      return allowed === origin;
+    });
+    
+    callback(null, isAllowed);
+  },
   credentials: true
 }));
 
