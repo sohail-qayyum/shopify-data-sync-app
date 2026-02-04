@@ -435,4 +435,60 @@ router.get('/test-connection', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/debug-token - Debug access token
+ */
+router.get('/debug-token', async (req, res) => {
+  try {
+    console.log('=== DEBUG TOKEN ===');
+    console.log('Shop Domain:', req.shopDomain);
+    console.log('Store ID:', req.storeId);
+    console.log('Access Token exists:', !!req.accessToken);
+    console.log('Access Token preview:', req.accessToken ? req.accessToken.substring(0, 15) + '...' : 'MISSING');
+    console.log('API Key ID:', req.apiKeyId);
+    console.log('Scopes:', req.scopes);
+    
+    // Try to call Shopify shop endpoint (simplest call)
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    
+    console.log('Base URL:', shopify.baseUrl);
+    console.log('Attempting to call /shop.json...');
+    
+    const shopInfo = await shopify.request('GET', '/shop.json');
+    
+    res.json({
+      success: true,
+      message: 'Access token is valid!',
+      shop: shopInfo.shop.name,
+      domain: shopInfo.shop.domain,
+      email: shopInfo.shop.email,
+      debugInfo: {
+        shopDomain: req.shopDomain,
+        apiVersion: shopify.apiVersion,
+        baseUrl: shopify.baseUrl,
+        hasAccessToken: !!req.accessToken,
+        scopes: req.scopes
+      }
+    });
+  } catch (error) {
+    console.error('❌ Token debug failed');
+    console.error('Error:', error.message);
+    console.error('Response:', error.response?.data);
+    console.error('Status:', error.response?.status);
+    
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      shopifyError: error.response?.data,
+      statusCode: error.response?.status,
+      debugInfo: {
+        shopDomain: req.shopDomain,
+        hasAccessToken: !!req.accessToken,
+        tokenPreview: req.accessToken ? req.accessToken.substring(0, 15) + '...' : 'MISSING'
+      }
+    });
+  }
+});
+
+
 module.exports = router;

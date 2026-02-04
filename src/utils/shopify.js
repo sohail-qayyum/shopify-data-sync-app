@@ -10,30 +10,44 @@ class ShopifyAPI {
     this.baseUrl = `https://${shop}/admin/api/${this.apiVersion}`;
   }
 
-  /**
-   * Make API request to Shopify
-   */
-  async request(method, endpoint, data = null) {
-    try {
-      const url = `${this.baseUrl}${endpoint}`;
-      const headers = {
-        'X-Shopify-Access-Token': this.accessToken,
-        'Content-Type': 'application/json'
-      };
+ /**
+ * Make API request to Shopify
+ */
+async request(method, endpoint, data = null) {
+  try {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers = {
+      'X-Shopify-Access-Token': this.accessToken,
+      'Content-Type': 'application/json'
+    };
 
-      const response = await axios({
-        method,
-        url,
-        headers,
-        data
-      });
+    console.log('🔵 Shopify API Request:');
+    console.log('  Method:', method);
+    console.log('  URL:', url);
+    console.log('  Endpoint:', endpoint);
+    console.log('  Has Access Token:', !!this.accessToken);
+    console.log('  Token Preview:', this.accessToken ? this.accessToken.substring(0, 10) + '...' : 'MISSING');
 
-      return response.data;
-    } catch (error) {
-      console.error('Shopify API Error:', error.response?.data || error.message);
-      throw error;
-    }
+    const response = await axios({
+      method,
+      url,
+      headers,
+      data
+    });
+
+    console.log('✅ Shopify API Success:', response.status);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Shopify API Error Details:');
+    console.error('  Status:', error.response?.status);
+    console.error('  Status Text:', error.response?.statusText);
+    console.error('  Error Data:', JSON.stringify(error.response?.data, null, 2));
+    console.error('  Request URL:', error.config?.url);
+    console.error('  Request Method:', error.config?.method);
+    
+    throw error;
   }
+}
 
   // Orders
   async getOrders(params = {}) {
