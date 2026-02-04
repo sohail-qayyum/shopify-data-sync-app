@@ -1,8 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const { verifyWebhook } = require('../utils/shopify');
+const crypto = require('crypto');
 const storeService = require('../services/storeService');
 const syncLogService = require('../services/syncLogService');
+const config = require('../config');
+
+/**
+ * Middleware to capture raw body for HMAC verification
+ * IMPORTANT: This must be BEFORE any other body parsing
+ */
+router.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString('utf8');
+  }
+}));
 
 /**
  * Middleware to verify webhook authenticity
@@ -12,21 +23,27 @@ async function verifyWebhookMiddleware(req, res, next) {
   const shop = req.get('X-Shopify-Shop-Domain');
   
   if (!hmac || !shop) {
+    console.error('❌ Webhook missing HMAC or shop domain');
     return res.status(401).send('Unauthorized');
   }
   
-  // Get raw body for HMAC verification
-  const rawBody = JSON.stringify(req.body);
+  // Use raw body for HMAC verification
+  const hash = crypto
+    .createHmac('sha256', config.shopify.apiSecret)
+    .update(req.rawBody, 'utf8')
+    .digest('base64');
   
-  if (!verifyWebhook(rawBody, hmac)) {
-    console.error('Invalid webhook HMAC');
+  if (hash !== hmac) {
+    console.error('❌ Invalid webhook HMAC for shop:', shop);
     return res.status(401).send('Unauthorized');
   }
+  
+  console.log('✅ Webhook HMAC verified for:', shop);
   
   // Get store from database
   const store = await storeService.getStoreByDomain(shop);
   if (!store) {
-    console.error('Store not found:', shop);
+    console.error('❌ Store not found:', shop);
     return res.status(404).send('Store not found');
   }
   
@@ -34,7 +51,6 @@ async function verifyWebhookMiddleware(req, res, next) {
   next();
 }
 
-router.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 router.use(verifyWebhookMiddleware);
 
 /**
@@ -71,11 +87,6 @@ router.post('/orders-create', async (req, res) => {
     total_price: order.total_price,
     customer: order.customer?.email
   });
-  
-  // Here you can add custom logic:
-  // - Send notification to your portal
-  // - Update local database
-  // - Trigger other processes
   
   res.status(200).send('OK');
 });

@@ -11,6 +11,23 @@ router.use(apiLimiter);
 router.use(verifyApiKey);
 
 /**
+ * Helper function to check scope
+ */
+function requireScope(scope) {
+  return (req, res, next) => {
+    if (!req.scopes || !req.scopes.includes(scope)) {
+      return res.status(403).json({
+        error: 'Insufficient permissions',
+        message: `This API key does not have the '${scope}' scope`,
+        yourScopes: req.scopes,
+        requiredScope: scope
+      });
+    }
+    next();
+  };
+}
+
+/**
  * Helper function to log sync operations
  */
 async function logOperation(req, action, resourceType, resourceId, status, details = null) {
@@ -34,24 +51,37 @@ async function logOperation(req, action, resourceType, resourceId, status, detai
 /**
  * GET /api/orders - Get all orders
  */
-router.get('/orders', async (req, res) => {
+router.get('/orders', requireScope('read_orders'), async (req, res) => {
   try {
+    console.log('=== GET /api/orders ===');
+    console.log('Shop:', req.shopDomain);
+    console.log('Query:', req.query);
+    
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getOrders(req.query);
+    
+    console.log('✅ Fetched', result.orders?.length || 0, 'orders');
     
     await logOperation(req, 'READ', 'order', null, 'success', { count: result.orders?.length || 0 });
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Orders fetch failed:', error.message);
+    console.error('Shopify error:', error.response?.data);
+    
     await logOperation(req, 'READ', 'order', null, 'error', { error: error.message });
-    res.status(500).json({ error: 'Failed to fetch orders', message: error.message });
+    res.status(500).json({ 
+      error: 'Failed to fetch orders', 
+      message: error.message,
+      details: error.response?.data
+    });
   }
 });
 
 /**
  * GET /api/orders/:id - Get specific order
  */
-router.get('/orders/:id', async (req, res) => {
+router.get('/orders/:id', requireScope('read_orders'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getOrder(req.params.id);
@@ -60,6 +90,7 @@ router.get('/orders/:id', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Order fetch failed:', error.message);
     await logOperation(req, 'READ', 'order', req.params.id, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch order', message: error.message });
   }
@@ -68,7 +99,7 @@ router.get('/orders/:id', async (req, res) => {
 /**
  * PUT /api/orders/:id - Update order
  */
-router.put('/orders/:id', async (req, res) => {
+router.put('/orders/:id', requireScope('write_orders'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.updateOrder(req.params.id, req.body);
@@ -77,6 +108,7 @@ router.put('/orders/:id', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Order update failed:', error.message);
     await logOperation(req, 'UPDATE', 'order', req.params.id, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to update order', message: error.message });
   }
@@ -87,15 +119,19 @@ router.put('/orders/:id', async (req, res) => {
 /**
  * GET /api/customers - Get all customers
  */
-router.get('/customers', async (req, res) => {
+router.get('/customers', requireScope('read_customers'), async (req, res) => {
   try {
+    console.log('=== GET /api/customers ===');
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getCustomers(req.query);
+    
+    console.log('✅ Fetched', result.customers?.length || 0, 'customers');
     
     await logOperation(req, 'READ', 'customer', null, 'success', { count: result.customers?.length || 0 });
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Customers fetch failed:', error.message);
     await logOperation(req, 'READ', 'customer', null, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch customers', message: error.message });
   }
@@ -104,7 +140,7 @@ router.get('/customers', async (req, res) => {
 /**
  * GET /api/customers/:id - Get specific customer
  */
-router.get('/customers/:id', async (req, res) => {
+router.get('/customers/:id', requireScope('read_customers'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getCustomer(req.params.id);
@@ -113,6 +149,7 @@ router.get('/customers/:id', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Customer fetch failed:', error.message);
     await logOperation(req, 'READ', 'customer', req.params.id, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch customer', message: error.message });
   }
@@ -121,7 +158,7 @@ router.get('/customers/:id', async (req, res) => {
 /**
  * PUT /api/customers/:id - Update customer
  */
-router.put('/customers/:id', async (req, res) => {
+router.put('/customers/:id', requireScope('write_customers'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.updateCustomer(req.params.id, req.body);
@@ -130,6 +167,7 @@ router.put('/customers/:id', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Customer update failed:', error.message);
     await logOperation(req, 'UPDATE', 'customer', req.params.id, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to update customer', message: error.message });
   }
@@ -140,15 +178,19 @@ router.put('/customers/:id', async (req, res) => {
 /**
  * GET /api/products - Get all products
  */
-router.get('/products', async (req, res) => {
+router.get('/products', requireScope('read_products'), async (req, res) => {
   try {
+    console.log('=== GET /api/products ===');
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getProducts(req.query);
+    
+    console.log('✅ Fetched', result.products?.length || 0, 'products');
     
     await logOperation(req, 'READ', 'product', null, 'success', { count: result.products?.length || 0 });
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Products fetch failed:', error.message);
     await logOperation(req, 'READ', 'product', null, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch products', message: error.message });
   }
@@ -157,7 +199,7 @@ router.get('/products', async (req, res) => {
 /**
  * GET /api/products/:id - Get specific product
  */
-router.get('/products/:id', async (req, res) => {
+router.get('/products/:id', requireScope('read_products'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getProduct(req.params.id);
@@ -166,6 +208,7 @@ router.get('/products/:id', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Product fetch failed:', error.message);
     await logOperation(req, 'READ', 'product', req.params.id, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch product', message: error.message });
   }
@@ -174,7 +217,7 @@ router.get('/products/:id', async (req, res) => {
 /**
  * PUT /api/products/:id - Update product
  */
-router.put('/products/:id', async (req, res) => {
+router.put('/products/:id', requireScope('write_products'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.updateProduct(req.params.id, req.body);
@@ -183,6 +226,7 @@ router.put('/products/:id', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Product update failed:', error.message);
     await logOperation(req, 'UPDATE', 'product', req.params.id, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to update product', message: error.message });
   }
@@ -191,7 +235,7 @@ router.put('/products/:id', async (req, res) => {
 /**
  * POST /api/products - Create product
  */
-router.post('/products', async (req, res) => {
+router.post('/products', requireScope('write_products'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.createProduct(req.body);
@@ -200,6 +244,7 @@ router.post('/products', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Product create failed:', error.message);
     await logOperation(req, 'CREATE', 'product', null, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to create product', message: error.message });
   }
@@ -210,15 +255,19 @@ router.post('/products', async (req, res) => {
 /**
  * GET /api/inventory - Get inventory levels
  */
-router.get('/inventory', async (req, res) => {
+router.get('/inventory', requireScope('read_inventory'), async (req, res) => {
   try {
+    console.log('=== GET /api/inventory ===');
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getInventoryLevels(req.query);
+    
+    console.log('✅ Fetched inventory levels');
     
     await logOperation(req, 'READ', 'inventory', null, 'success', { count: result.inventory_levels?.length || 0 });
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Inventory fetch failed:', error.message);
     await logOperation(req, 'READ', 'inventory', null, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch inventory', message: error.message });
   }
@@ -227,7 +276,7 @@ router.get('/inventory', async (req, res) => {
 /**
  * POST /api/inventory/sync - Sync inventory to Shopify
  */
-router.post('/inventory/sync', async (req, res) => {
+router.post('/inventory/sync', requireScope('write_inventory'), async (req, res) => {
   try {
     const { inventory_item_id, location_id, available } = req.body;
     
@@ -240,6 +289,8 @@ router.post('/inventory/sync', async (req, res) => {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.updateInventoryLevel(inventory_item_id, location_id, available);
     
+    console.log('✅ Inventory synced:', inventory_item_id);
+    
     await logOperation(req, 'UPDATE', 'inventory', inventory_item_id, 'success', { 
       location_id, 
       available 
@@ -247,6 +298,7 @@ router.post('/inventory/sync', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Inventory sync failed:', error.message);
     await logOperation(req, 'UPDATE', 'inventory', req.body.inventory_item_id, 'error', { 
       error: error.message 
     });
@@ -259,15 +311,19 @@ router.post('/inventory/sync', async (req, res) => {
 /**
  * GET /api/locations - Get all locations
  */
-router.get('/locations', async (req, res) => {
+router.get('/locations', requireScope('read_locations'), async (req, res) => {
   try {
+    console.log('=== GET /api/locations ===');
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getLocations();
+    
+    console.log('✅ Fetched', result.locations?.length || 0, 'locations');
     
     await logOperation(req, 'READ', 'location', null, 'success', { count: result.locations?.length || 0 });
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Locations fetch failed:', error.message);
     await logOperation(req, 'READ', 'location', null, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch locations', message: error.message });
   }
@@ -278,7 +334,7 @@ router.get('/locations', async (req, res) => {
 /**
  * GET /api/orders/:orderId/fulfillments - Get fulfillments for an order
  */
-router.get('/orders/:orderId/fulfillments', async (req, res) => {
+router.get('/orders/:orderId/fulfillments', requireScope('read_fulfillments'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getFulfillments(req.params.orderId);
@@ -287,6 +343,7 @@ router.get('/orders/:orderId/fulfillments', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Fulfillments fetch failed:', error.message);
     await logOperation(req, 'READ', 'fulfillment', null, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to fetch fulfillments', message: error.message });
   }
@@ -295,10 +352,12 @@ router.get('/orders/:orderId/fulfillments', async (req, res) => {
 /**
  * POST /api/orders/:orderId/fulfillments - Create fulfillment
  */
-router.post('/orders/:orderId/fulfillments', async (req, res) => {
+router.post('/orders/:orderId/fulfillments', requireScope('write_fulfillments'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.createFulfillment(req.params.orderId, req.body);
+    
+    console.log('✅ Fulfillment created for order:', req.params.orderId);
     
     await logOperation(req, 'CREATE', 'fulfillment', result.fulfillment?.id, 'success', { 
       order_id: req.params.orderId 
@@ -306,6 +365,7 @@ router.post('/orders/:orderId/fulfillments', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('❌ Fulfillment create failed:', error.message);
     await logOperation(req, 'CREATE', 'fulfillment', null, 'error', { error: error.message });
     res.status(500).json({ error: 'Failed to create fulfillment', message: error.message });
   }
@@ -340,6 +400,38 @@ router.get('/stats', async (req, res) => {
     res.json({ summary, hours });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch stats', message: error.message });
+  }
+});
+
+// ===== TEST CONNECTION =====
+
+/**
+ * GET /api/test-connection - Test Shopify connection
+ */
+router.get('/test-connection', async (req, res) => {
+  try {
+    console.log('=== Testing Shopify Connection ===');
+    console.log('Shop:', req.shopDomain);
+    console.log('Scopes:', req.scopes);
+    
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    const shopInfo = await shopify.request('GET', '/shop.json');
+    
+    res.json({
+      success: true,
+      shop: shopInfo.shop.name,
+      domain: shopInfo.shop.domain,
+      scopes: req.scopes,
+      message: '✅ Shopify connection is working perfectly!'
+    });
+  } catch (error) {
+    console.error('❌ Connection test failed:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: error.response?.data,
+      message: 'Connection failed. Please reinstall the app or check your access token.'
+    });
   }
 });
 
