@@ -7,20 +7,33 @@ const webhookService = require('../services/webhookService');
 const syncLogService = require('../services/syncLogService');
 const config = require('../config');
 
+// Add CORS headers for admin API routes
+router.use('/api/admin/*', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
 /**
  * GET /admin - Serve admin UI (embedded in Shopify)
  */
 router.get('/admin', (req, res) => {
   const { shop, token } = req.query;
-  
+
   if (!shop) {
     return res.status(400).send('Missing shop parameter');
   }
-  
+
   // Set headers to allow embedding
   res.setHeader('Content-Security-Policy', "frame-ancestors https://*.myshopify.com https://admin.shopify.com");
   res.removeHeader('X-Frame-Options');
-  
+
   // Serve embedded admin page
   res.send(`
     <!DOCTYPE html>
@@ -86,26 +99,35 @@ router.get('/admin', (req, res) => {
 
         async function fetchData() {
           try {
-            const response = await fetch(\`\${API_URL}/api/admin/store\`, {
+            console.log('Fetching store data...');
+            console.log('Token:', TOKEN);
+            console.log('API URL:', API_URL);
+            
+            const response = await fetch(API_URL + '/api/admin/store', {
               headers: {
-                'Authorization': \`Bearer \${TOKEN}\`,
+                'Authorization': 'Bearer ' + TOKEN,
                 'Content-Type': 'application/json'
               }
             });
             
-            if (!response.ok) throw new Error('Failed to fetch data');
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+              const errorData = await response.json().catch(function() { return { error: 'Unknown error' }; });
+              console.error('API Error:', errorData);
+              throw new Error(errorData.error || 'HTTP ' + response.status + ': Failed to fetch data');
+            }
             
             const data = await response.json();
+            console.log('Data received:', data);
+            
             storeData = data.store;
             apiKeys = data.apiKeys || [];
             
             render();
           } catch (error) {
-            document.getElementById('app').innerHTML = \`
-              <div class="error">
-                <strong>Error:</strong> \${error.message}
-              </div>
-            \`;
+            console.error('Fetch error:', error);
+            document.getElementById('app').innerHTML = '<div class="error"><strong>Error:</strong> ' + error.message + '<br><br><strong>Troubleshooting:</strong><ul style="text-align: left; margin: 10px 0;"><li>Check browser console (F12) for details</li><li>Verify app URL in .env matches your domain</li><li>Check server logs: <code>pm2 logs shopify-app</code></li><li>Ensure database connection is working</li></ul><button class="button" onclick="location.reload()">Retry</button></div>';
           }
         }
 
@@ -114,20 +136,20 @@ router.get('/admin', (req, res) => {
           if (!name) return;
           
           try {
-            const response = await fetch(\`\${API_URL}/api/admin/api-keys\`, {
+            const response = await fetch(API_URL + '/api/admin/api-keys', {
               method: 'POST',
               headers: {
-                'Authorization': \`Bearer \${TOKEN}\`,
+                'Authorization': 'Bearer ' + TOKEN,
                 'Content-Type': 'application/json'
               },
-              body: JSON.stringify({ name })
+              body: JSON.stringify({ name: name })
             });
             
             if (!response.ok) throw new Error('Failed to create API key');
             
             const data = await response.json();
             
-            alert(\`API Key Created!\\n\\nAPI Key: \${data.api_key}\\nAPI Secret: \${data.api_secret}\\n\\nSave these credentials securely. You won't be able to see the secret again!\`);
+            alert('API Key Created!\\n\\nAPI Key: ' + data.api_key + '\\nAPI Secret: ' + data.api_secret + '\\n\\nSave these credentials securely. You won\\'t be able to see the secret again!');
             
             await fetchData();
           } catch (error) {
@@ -141,10 +163,10 @@ router.get('/admin', (req, res) => {
           }
           
           try {
-            const response = await fetch(\`\${API_URL}/api/admin/api-keys/\${keyId}\`, {
+            const response = await fetch(API_URL + '/api/admin/api-keys/' + keyId, {
               method: 'DELETE',
               headers: {
-                'Authorization': \`Bearer \${TOKEN}\`
+                'Authorization': 'Bearer ' + TOKEN
               }
             });
             
@@ -157,95 +179,21 @@ router.get('/admin', (req, res) => {
         }
 
         function render() {
-          const activeKeys = apiKeys.filter(k => k.is_active).length;
+          const activeKeys = apiKeys.filter(function(k) { return k.is_active; }).length;
           const totalKeys = apiKeys.length;
           
-          document.getElementById('app').innerHTML = \`
-            <div class="stats">
-              <div class="stat-card">
-                <div class="stat-label">Store</div>
-                <div class="stat-value" style="font-size: 18px;">\${SHOP}</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label">Active API Keys</div>
-                <div class="stat-value">\${activeKeys}</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label">Total API Keys</div>
-                <div class="stat-value">\${totalKeys}</div>
-              </div>
-            </div>
-
-            <div class="card">
-              <h2>📋 API Keys</h2>
-              <p>Create API keys to allow your custom inventory portal to access Shopify data in real-time.</p>
-              <button class="button" onclick="createApiKey()">+ Create New API Key</button>
-              
-              <div style="margin-top: 20px;">
-                \${apiKeys.length === 0 ? 
-                  '<p style="color: #637381;">No API keys created yet. Create one to get started!</p>' :
-                  apiKeys.map(key => \`
-                    <div class="api-key-item">
-                      <h3>\${key.name} <span class="badge \${key.is_active ? 'badge-success' : 'badge-inactive'}">\${key.is_active ? 'Active' : 'Inactive'}</span></h3>
-                      <p><strong>Created:</strong> \${new Date(key.created_at).toLocaleString()}</p>
-                      <p><strong>Last Used:</strong> \${key.last_used_at ? new Date(key.last_used_at).toLocaleString() : 'Never'}</p>
-                      <p><strong>Scopes:</strong> \${key.scopes}</p>
-                      <button class="button button-danger" onclick="deleteApiKey(\${key.id})">Delete</button>
-                    </div>
-                  \`).join('')
-                }
-              </div>
-            </div>
-
-            <div class="card">
-              <h2>🔌 API Endpoints</h2>
-              <p>Use these endpoints in your custom inventory portal with your API key and secret.</p>
-              
-              <div class="code" style="margin: 15px 0;">
-                Base URL: <strong>\${API_URL}/api</strong>
-              </div>
-
-              <div class="endpoints">
-                <div class="endpoint">
-                  <span class="endpoint-method method-get">GET</span>
-                  <code>/orders</code> - Get all orders
-                </div>
-                <div class="endpoint">
-                  <span class="endpoint-method method-get">GET</span>
-                  <code>/orders/:id</code> - Get specific order
-                </div>
-                <div class="endpoint">
-                  <span class="endpoint-method method-put">PUT</span>
-                  <code>/orders/:id</code> - Update order (tags, status)
-                </div>
-                <div class="endpoint">
-                  <span class="endpoint-method method-get">GET</span>
-                  <code>/customers</code> - Get all customers
-                </div>
-                <div class="endpoint">
-                  <span class="endpoint-method method-get">GET</span>
-                  <code>/products</code> - Get all products
-                </div>
-                <div class="endpoint">
-                  <span class="endpoint-method method-put">PUT</span>
-                  <code>/products/:id</code> - Update product
-                </div>
-                <div class="endpoint">
-                  <span class="endpoint-method method-get">GET</span>
-                  <code>/inventory</code> - Get inventory levels
-                </div>
-                <div class="endpoint">
-                  <span class="endpoint-method method-post">POST</span>
-                  <code>/inventory/sync</code> - Sync inventory to Shopify
-                </div>
-              </div>
-
-              <p style="margin-top: 15px; color: #637381;"><strong>Authentication:</strong> Include headers <code>X-API-Key</code> and <code>X-API-Secret</code> in all requests.</p>
-            </div>
-          \`;
+          let apiKeysHtml = '';
+          if (apiKeys.length === 0) {
+            apiKeysHtml = '<p style="color: #637381;">No API keys created yet. Create one to get started!</p>';
+          } else {
+            apiKeysHtml = apiKeys.map(function(key) {
+              return '<div class="api-key-item"><h3>' + key.name + ' <span class="badge ' + (key.is_active ? 'badge-success' : 'badge-inactive') + '">' + (key.is_active ? 'Active' : 'Inactive') + '</span></h3><p><strong>Created:</strong> ' + new Date(key.created_at).toLocaleString() + '</p><p><strong>Last Used:</strong> ' + (key.last_used_at ? new Date(key.last_used_at).toLocaleString() : 'Never') + '</p><p><strong>Scopes:</strong> ' + key.scopes + '</p><button class="button button-danger" onclick="deleteApiKey(' + key.id + ')">Delete</button></div>';
+            }).join('');
+          }
+          
+          document.getElementById('app').innerHTML = '<div class="stats"><div class="stat-card"><div class="stat-label">Store</div><div class="stat-value" style="font-size: 18px;">' + SHOP + '</div></div><div class="stat-card"><div class="stat-label">Active API Keys</div><div class="stat-value">' + activeKeys + '</div></div><div class="stat-card"><div class="stat-label">Total API Keys</div><div class="stat-value">' + totalKeys + '</div></div></div><div class="card"><h2>📋 API Keys</h2><p>Create API keys to allow your custom inventory portal to access Shopify data in real-time.</p><button class="button" onclick="createApiKey()">+ Create New API Key</button><div style="margin-top: 20px;">' + apiKeysHtml + '</div></div><div class="card"><h2>🔌 API Endpoints</h2><p>Use these endpoints in your custom inventory portal with your API key and secret.</p><div class="code" style="margin: 15px 0;">Base URL: <strong>' + API_URL + '/api</strong></div><div class="endpoints"><div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/orders</code> - Get all orders</div><div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/orders/:id</code> - Get specific order</div><div class="endpoint"><span class="endpoint-method method-put">PUT</span><code>/orders/:id</code> - Update order (tags, status)</div><div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/customers</code> - Get all customers</div><div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/products</code> - Get all products</div><div class="endpoint"><span class="endpoint-method method-put">PUT</span><code>/products/:id</code> - Update product</div><div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/inventory</code> - Get inventory levels</div><div class="endpoint"><span class="endpoint-method method-post">POST</span><code>/inventory/sync</code> - Sync inventory to Shopify</div></div><p style="margin-top: 15px; color: #637381;"><strong>Authentication:</strong> Include headers <code>X-API-Key</code> and <code>X-API-Secret</code> in all requests.</p></div>';
         }
 
-        // Initialize
         fetchData();
       </script>
     </body>
@@ -258,21 +206,27 @@ router.get('/admin', (req, res) => {
  */
 router.get('/api/admin/store', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  
+
   if (!token) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    console.error('No authorization token provided');
+    return res.status(401).json({ error: 'Unauthorized - No token provided' });
   }
-  
+
   try {
     const decoded = jwt.verify(token, config.security.jwtSecret);
+    console.log('Token decoded successfully:', { shop: decoded.shop, storeId: decoded.storeId });
+
     const store = await storeService.getStoreById(decoded.storeId);
-    
+
     if (!store) {
+      console.error('Store not found for ID:', decoded.storeId);
       return res.status(404).json({ error: 'Store not found' });
     }
-    
+
     const apiKeys = await apiKeyService.getApiKeysByStore(store.id);
-    
+
+    console.log('Store data fetched successfully:', { shop: store.shop_domain, apiKeysCount: apiKeys.length });
+
     res.json({
       store: {
         shop_domain: store.shop_domain,
@@ -283,7 +237,15 @@ router.get('/api/admin/store', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching store data:', error);
-    res.status(500).json({ error: 'Failed to fetch data' });
+
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired' });
+    }
+
+    res.status(500).json({ error: 'Failed to fetch data', details: error.message });
   }
 });
 
@@ -293,25 +255,25 @@ router.get('/api/admin/store', async (req, res) => {
 router.post('/api/admin/api-keys', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   const { name } = req.body;
-  
+
   if (!token) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  
+
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
   }
-  
+
   try {
     const decoded = jwt.verify(token, config.security.jwtSecret);
     const store = await storeService.getStoreById(decoded.storeId);
-    
+
     if (!store) {
       return res.status(404).json({ error: 'Store not found' });
     }
-    
+
     const apiKey = await apiKeyService.createApiKey(store.id, name, store.scopes);
-    
+
     res.json(apiKey);
   } catch (error) {
     console.error('Error creating API key:', error);
@@ -325,19 +287,19 @@ router.post('/api/admin/api-keys', async (req, res) => {
 router.delete('/api/admin/api-keys/:id', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   const { id } = req.params;
-  
+
   if (!token) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  
+
   try {
     const decoded = jwt.verify(token, config.security.jwtSecret);
     const deleted = await apiKeyService.deleteApiKey(parseInt(id), decoded.storeId);
-    
+
     if (!deleted) {
       return res.status(404).json({ error: 'API key not found' });
     }
-    
+
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting API key:', error);

@@ -77,11 +77,12 @@ router.get('/auth/callback', verifyHmac, async (req, res) => {
       { expiresIn: '7d' }
     );
     
-    // Redirect to app with token
-    res.redirect(`/admin?shop=${shop}&token=${token}`);
+    // Redirect to app with token - FIXED URL encoding
+    const redirectUrl = `${config.app.url}/admin?shop=${encodeURIComponent(shop)}&token=${encodeURIComponent(token)}`;
+    res.redirect(redirectUrl);
   } catch (error) {
     console.error('OAuth callback error:', error);
-    res.status(500).send('Authentication failed');
+    res.status(500).send('Authentication failed: ' + error.message);
   }
 });
 

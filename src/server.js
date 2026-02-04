@@ -12,69 +12,47 @@ const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
 
-// Trust proxy (needed when behind Nginx with HTTPS)
+// Trust proxy
 app.set('trust proxy', true);
 
-// IMPORTANT: Disable helmet for Shopify embedded app routes
-// Helmet's default settings block iframe embedding
+// Disable helmet for admin and auth routes to allow iframe embedding
 app.use((req, res, next) => {
-  // Allow embedding in Shopify Admin iframe
-  if (req.path.startsWith('/admin') || req.path.startsWith('/auth')) {
-    // Don't use helmet for these routes
+  if (req.path.startsWith('/admin') || req.path.startsWith('/auth') || req.path.startsWith('/api/admin')) {
     return next();
   }
-  
-  // Use helmet for other routes
   helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false
   })(req, res, next);
 });
 
-// Set proper headers for Shopify embedding
+// Allow embedding in Shopify
 app.use((req, res, next) => {
-  // Remove X-Frame-Options to allow embedding
   res.removeHeader('X-Frame-Options');
-  
-  // Allow embedding from Shopify admin
-  res.setHeader(
-    'Content-Security-Policy',
-    "frame-ancestors https://*.myshopify.com https://admin.shopify.com"
-  );
-  
+  res.setHeader('Content-Security-Policy', "frame-ancestors https://*.myshopify.com https://admin.shopify.com");
   next();
 });
 
-// CORS configuration - allow Shopify domains
+// CORS - Allow all for now (you can restrict later)
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests from Shopify domains and your app domain
-    const allowedOrigins = [
-      config.app.url,
-      /https:\/\/.*\.myshopify\.com$/,
-      /https:\/\/admin\.shopify\.com$/
-    ];
-    
-    if (!origin) return callback(null, true);
-    
-    const isAllowed = allowedOrigins.some(allowed => {
-      if (allowed instanceof RegExp) {
-        return allowed.test(origin);
-      }
-      return allowed === origin;
-    });
-    
-    callback(null, isAllowed);
-  },
-  credentials: true
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-API-Secret']
 }));
 
 // Cookie parser
 app.use(cookieParser());
 
-// Body parser - regular routes
+// Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Logging middleware (helpful for debugging)
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
