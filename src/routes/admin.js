@@ -20,20 +20,27 @@ router.use('/api/admin/*', (req, res, next) => {
   next();
 });
 
+
 /**
  * GET /admin - Serve admin UI (embedded in Shopify)
  */
 router.get('/admin', (req, res) => {
   const { shop, token } = req.query;
-
+  
   if (!shop) {
-    return res.status(400).send('Missing shop parameter');
+    return res.status(400).send('Missing shop parameter. Please install the app first.');
   }
-
+  
+  // If no token or invalid token, redirect to OAuth
+  if (!token || token === 'undefined' || token === 'null') {
+    console.log('No valid token found, redirecting to OAuth for shop:', shop);
+    return res.redirect(`/auth?shop=${shop}`);
+  }
+  
   // Set headers to allow embedding
   res.setHeader('Content-Security-Policy', "frame-ancestors https://*.myshopify.com https://admin.shopify.com");
   res.removeHeader('X-Frame-Options');
-
+  
   // Serve embedded admin page
   res.send(`
     <!DOCTYPE html>
@@ -103,6 +110,10 @@ router.get('/admin', (req, res) => {
             console.log('Token:', TOKEN);
             console.log('API URL:', API_URL);
             
+            if (!TOKEN || TOKEN === 'undefined' || TOKEN === 'null') {
+              throw new Error('No authentication token. Please reinstall the app.');
+            }
+            
             const response = await fetch(API_URL + '/api/admin/store', {
               headers: {
                 'Authorization': 'Bearer ' + TOKEN,
@@ -115,6 +126,11 @@ router.get('/admin', (req, res) => {
             if (!response.ok) {
               const errorData = await response.json().catch(function() { return { error: 'Unknown error' }; });
               console.error('API Error:', errorData);
+              
+              if (response.status === 401) {
+                throw new Error('Authentication expired. Please reinstall the app at: ' + API_URL + '/auth?shop=' + SHOP);
+              }
+              
               throw new Error(errorData.error || 'HTTP ' + response.status + ': Failed to fetch data');
             }
             
@@ -127,7 +143,7 @@ router.get('/admin', (req, res) => {
             render();
           } catch (error) {
             console.error('Fetch error:', error);
-            document.getElementById('app').innerHTML = '<div class="error"><strong>Error:</strong> ' + error.message + '<br><br><strong>Troubleshooting:</strong><ul style="text-align: left; margin: 10px 0;"><li>Check browser console (F12) for details</li><li>Verify app URL in .env matches your domain</li><li>Check server logs: <code>pm2 logs shopify-app</code></li><li>Ensure database connection is working</li></ul><button class="button" onclick="location.reload()">Retry</button></div>';
+            document.getElementById('app').innerHTML = '<div class="error"><strong>Error:</strong> ' + error.message + '<br><br><strong>Troubleshooting:</strong><ul style="text-align: left; margin: 10px 0;"><li>Check browser console (F12) for details</li><li>Verify app URL in .env matches your domain</li><li>Check server logs: <code>pm2 logs shopify-app</code></li><li>Ensure database connection is working</li></ul><a href="' + API_URL + '/auth?shop=' + SHOP + '" class="button">Reinstall App</a> <button class="button" onclick="location.reload()" style="margin-left: 10px;">Retry</button></div>';
           }
         }
 
@@ -200,6 +216,8 @@ router.get('/admin', (req, res) => {
     </html>
   `);
 });
+
+
 
 /**
  * GET /api/admin/store - Get store data and API keys
