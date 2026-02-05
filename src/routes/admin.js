@@ -6,6 +6,8 @@ const apiKeyService = require('../services/apiKeyService');
 const webhookService = require('../services/webhookService');
 const syncLogService = require('../services/syncLogService');
 const config = require('../config');
+const axios = require('axios');
+const nodemailer = require('nodemailer');
 
 // Add CORS headers for admin API routes
 router.use('/api/admin/*', (req, res, next) => {
@@ -246,7 +248,7 @@ router.get('/admin', (req, res) => {
           </div>
           <div class="modal-footer">
             <button class="button button-secondary" onclick="closeSupportModal()">Cancel</button>
-            <button class="button" onclick="submitSupport()">Send Message</button>
+            <button class="button" id="submitSupportBtn" onclick="submitSupport()">Send Message</button>
           </div>
         </div>
       </div>
@@ -256,20 +258,7 @@ router.get('/admin', (req, res) => {
         const SHOP = '${shop}';
         const TOKEN = '${token}';
 
-        const AVAILABLE_SCOPES = [
-          { value: 'read_orders', label: 'Read Orders', description: 'View order data' },
-          { value: 'write_orders', label: 'Write Orders', description: 'Update orders' },
-          { value: 'read_customers', label: 'Read Customers', description: 'View customer data' },
-          { value: 'write_customers', label: 'Write Customers', description: 'Update customers' },
-          { value: 'read_products', label: 'Read Products', description: 'View product data' },
-          { value: 'write_products', label: 'Write Products', description: 'Update products' },
-          { value: 'read_inventory', label: 'Read Inventory', description: 'View inventory levels' },
-          { value: 'write_inventory', label: 'Write Inventory', description: 'Update inventory' },
-          { value: 'read_fulfillments', label: 'Read Fulfillments', description: 'View fulfillment data' },
-          { value: 'write_fulfillments', label: 'Write Fulfillments', description: 'Create fulfillments' },
-          { value: 'read_locations', label: 'Read Locations', description: 'View store locations' },
-          { value: 'read_product_listings', label: 'Read Product Listings', description: 'View published products' }
-        ];
+        let AVAILABLE_SCOPES = [];
 
         let storeData = null;
         let apiKeys = [];
@@ -399,18 +388,38 @@ router.get('/admin', (req, res) => {
             return;
           }
           
-          // Here you can send to your support system
-          console.log('Support request:', { email, subject, message, shop: SHOP });
-          
-          // Show success message
-          document.getElementById('supportSuccess').style.display = 'block';
-          document.getElementById('supportEmail').value = '';
-          document.getElementById('supportSubject').value = '';
-          document.getElementById('supportMessage').value = '';
-          
-          setTimeout(function() {
-            closeSupportModal();
-          }, 2000);
+          const submitBtn = document.getElementById('submitSupportBtn');
+          if (submitBtn) submitBtn.disabled = true;
+
+          try {
+            const response = await fetch(API_URL + '/api/admin/support', {
+              method: 'POST',
+              headers: {
+                'Authorization': 'Bearer ' + TOKEN,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ email, subject, message })
+            });
+
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.error || 'Failed to send support request');
+            }
+            
+            // Show success message
+            document.getElementById('supportSuccess').style.display = 'block';
+            document.getElementById('supportEmail').value = '';
+            document.getElementById('supportSubject').value = '';
+            document.getElementById('supportMessage').value = '';
+            
+            setTimeout(function() {
+              closeSupportModal();
+            }, 3000);
+          } catch (error) {
+            alert('Error sending support request: ' + error.message);
+          } finally {
+            if (submitBtn) submitBtn.disabled = false;
+          }
         }
 
         async function fetchData() {
@@ -441,11 +450,19 @@ router.get('/admin', (req, res) => {
             }
             
             const data = await response.json();
-            console.log('Data received:', data);
             
             storeData = data.store;
             apiKeys = data.apiKeys || [];
             
+            // Dynamically generate AVAILABLE_SCOPES from the store's installed scopes
+            AVAILABLE_SCOPES = storeData.scopes.map(function(s) {
+              const label = s.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
+              let description = 'Access to ' + label;
+              if (s.startsWith('read_')) description = 'View ' + label.replace('Read ', '') + ' data';
+              if (s.startsWith('write_')) description = 'Manage ' + label.replace('Write ', '');
+              return { value: s, label: label, description: description };
+            });
+
             render();
           } catch (error) {
             console.error('Fetch error:', error);
@@ -494,7 +511,9 @@ router.get('/admin', (req, res) => {
             '<div class="endpoints">' +
               AVAILABLE_SCOPES.filter(function(s) { return storeData.scopes.includes(s.value); }).map(function(s) {
                 const resource = s.value.replace('read_', '').replace('write_', '');
-                return '<div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/' + resource + '</code> — ' + s.description + '</div>';
+                let queryParam = '';
+                if (resource === 'fulfillments') queryParam = '?order_id=...';
+                return '<div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/' + resource + queryParam + '</code> — ' + s.description + '</div>';
               }).join('') +
               '<div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/resources</code> — Discover all available endpoints</div>' +
             '</div>' +
@@ -627,6 +646,92 @@ router.delete('/api/admin/api-keys/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting API key:', error);
     res.status(500).json({ error: 'Failed to delete API key' });
+  }
+});
+
+/**
+ * POST /api/admin/support - Send support request to Slack
+ */
+router.post('/api/admin/support', async (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  const { email, subject, message } = req.body;
+
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, config.security.jwtSecret);
+    const store = await storeService.getStoreById(decoded.storeId);
+
+    if (!store) {
+      return res.status(404).json({ error: 'Store not found' });
+    }
+
+    const webhookUrl = config.app.supportWebhookUrl;
+    const supportEmail = config.app.supportEmail;
+
+    if (!webhookUrl && !supportEmail) {
+      console.warn('⚠️ No support notification (Slack/Email) configured. Request logged only.');
+      console.log('Support request:', { shop: store.shop_domain, email, subject, message });
+      return res.json({ success: true, message: 'Request logged (Notifications not configured)' });
+    }
+
+    // 1. Send to Slack if configured
+    if (webhookUrl) {
+      const slackMessage = {
+        text: `🆕 *New Support Request from ${store.shop_domain}*`,
+        attachments: [
+          {
+            color: "#36a64f",
+            fields: [
+              { title: "Store", value: store.shop_domain, short: true },
+              { title: "Contact Email", value: email, short: true },
+              { title: "Subject", value: subject, short: false },
+              { title: "Message", value: message, short: false }
+            ],
+            footer: "Shopify Data Sync App",
+            ts: Math.floor(Date.now() / 1000)
+          }
+        ]
+      };
+      await axios.post(webhookUrl, slackMessage).catch(err => console.error('Slack error:', err.message));
+    }
+
+    // 2. Send to Email if configured
+    if (supportEmail && config.app.smtp.host) {
+      const transporter = nodemailer.createTransport({
+        host: config.app.smtp.host,
+        port: config.app.smtp.port,
+        secure: config.app.smtp.port == 465,
+        auth: {
+          user: config.app.smtp.user,
+          pass: config.app.smtp.pass
+        }
+      });
+
+      await transporter.sendMail({
+        from: `"${store.shop_domain} Support" <${config.app.smtp.user}>`,
+        to: supportEmail,
+        replyTo: email,
+        subject: `[Support Request] ${subject}`,
+        text: `Store: ${store.shop_domain}\nFrom: ${email}\nSubject: ${subject}\n\nMessage:\n${message}`,
+        html: `
+          <h3>New Support Request</h3>
+          <p><strong>Store:</strong> ${store.shop_domain}</p>
+          <p><strong>From:</strong> ${email}</p>
+          <p><strong>Subject:</strong> ${subject}</p>
+          <hr/>
+          <p><strong>Message:</strong></p>
+          <p>${message.replace(/\n/g, '<br>')}</p>
+        `
+      }).catch(err => console.error('Email error:', err.message));
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error sending support request:', error);
+    res.status(500).json({ error: 'Failed to send support request' });
   }
 });
 

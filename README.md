@@ -7,11 +7,13 @@ A professional, multi-tenant Shopify app that enables real-time synchronization 
 - ✅ **Multi-tenant Support** - Install on multiple Shopify stores
 - 🔐 **Secure OAuth Authentication** - Industry-standard Shopify OAuth flow
 - 🔑 **API Key Management** - Generate and manage API keys from Shopify admin
+- 📡 **Universal Dynamic API** - Future-proof resource access using `/api/v1/:resource`
 - 📡 **Real-time Webhooks** - Instant notifications for data changes
-- 📊 **Comprehensive Data Access** - Orders, customers, products, inventory, fulfillments
+- 📊 **Comprehensive Data Access** - Orders, Customers, Products, Inventory, Fulfillments, Draft Orders, and more
 - 📈 **Activity Logging** - Track all sync operations
 - 🚀 **Production Ready** - Rate limiting, encryption, error handling
-- 🎨 **Admin UI** - Beautiful embedded admin panel in Shopify
+- 🎨 **Dynamic Admin UI** - Embedded panel that adapts to your store's permissions
+- 💬 **Integrated Support** - Contact support directly via Slack or Email
 
 ## 📋 Prerequisites
 
@@ -117,68 +119,30 @@ X-API-Key: sk_your_api_key_here
 X-API-Secret: your_api_secret_here
 ```
 
-## 📡 API Endpoints
+## 📡 Universal API (v1)
 
-Base URL: `https://your-subdomain.yourdomain.com/api`
+The app uses a **Universal Resource Router**. This means any resource you have permission for is automatically available.
 
-### Orders
+Base URL: `https://your-domain.com/api/v1`
 
+### 🔍 Resource Discovery
+Get a list of all resources your API key can access:
 ```http
-GET    /orders              # Get all orders
-GET    /orders/:id          # Get specific order
-PUT    /orders/:id          # Update order (tags, status)
+GET /v1/resources
 ```
 
-**Example - Update Order Tags:**
-```bash
-curl -X PUT https://your-app.com/api/orders/123456789 \
-  -H "X-API-Key: sk_your_key" \
-  -H "X-API-Secret: your_secret" \
-  -H "Content-Type: application/json" \
-  -d '{"tags": "processed, shipped"}'
-```
-
-### Customers
-
+### 📦 Dynamic Resource Access
+Access any Shopify resource directly:
 ```http
-GET    /customers           # Get all customers
-GET    /customers/:id       # Get specific customer
-PUT    /customers/:id       # Update customer
+GET /v1/{resource}
 ```
+**Supported Resources (Dynamically inferred):**
+- `orders`, `customers`, `products`, `inventory`, `locations`, `fulfillments`, `fulfillment_orders`, `returns`, `discounts`, `price_rules`, `draft_orders`, and any others associated with your app scopes.
 
-### Products
-
+### 📍 Smart Inventory
+The inventory endpoint automatically identifies your store's primary location if no ID is provided:
 ```http
-GET    /products            # Get all products
-GET    /products/:id        # Get specific product
-PUT    /products/:id        # Update product
-POST   /products            # Create product
-```
-
-### Inventory
-
-```http
-GET    /inventory           # Get inventory levels
-POST   /inventory/sync      # Sync inventory to Shopify
-```
-
-**Example - Sync Inventory:**
-```bash
-curl -X POST https://your-app.com/api/inventory/sync \
-  -H "X-API-Key: sk_your_key" \
-  -H "X-API-Secret: your_secret" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "inventory_item_id": 12345,
-    "location_id": 67890,
-    "available": 100
-  }'
-```
-
-### Locations
-
-```http
-GET    /locations           # Get all store locations
+GET /v1/inventory?limit=50
 ```
 
 ### Fulfillments
@@ -267,7 +231,7 @@ shopify-data-sync-app/
 │   ├── routes/              # API routes
 │   ├── services/            # Business logic services
 │   ├── utils/               # Utility functions
-│   └── server.js            # Main server file
+│      └── server.js            # Main server file
 ├── package.json
 ├── .env.example
 └── README.md
@@ -472,6 +436,11 @@ async function syncInventory(inventoryItemId, locationId, quantity) {
 **4. API authentication failures**
 - Ensure both `X-API-Key` and `X-API-Secret` headers are included
 - Verify the API key is active in admin panel
+- Check that your key has the required "read" or "write" scope for the resource
+
+**5. Support Form not sending messages**
+- Verify `SUPPORT_WEBHOOK_URL` or `SUPPORT_EMAIL` is set in your environment
+- For Email, ensure your SMTP credentials (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`) are correct
 
 ### Enable Debug Logging
 

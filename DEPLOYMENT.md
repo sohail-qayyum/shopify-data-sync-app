@@ -155,6 +155,17 @@ DB_PASSWORD=your_secure_password_here
 JWT_SECRET=<generate-random-64-char-string>
 API_KEY_ENCRYPTION_SECRET=<generate-random-64-char-string>
 SESSION_SECRET=<generate-random-64-char-string>
+
+# Support Notifications (Optional)
+# Slack Webhook URL
+SUPPORT_WEBHOOK_URL=https://hooks.slack.com/services/XXXXXXXXX
+
+# Email Support (for receiving requests via email)
+SUPPORT_EMAIL=your-support@example.com
+SMTP_HOST=smtp.yourprovider.com
+SMTP_PORT=587
+SMTP_USER=your-sending-email@example.com
+SMTP_PASS=your-app-password
 ```
 
 **Generate secure random strings:**

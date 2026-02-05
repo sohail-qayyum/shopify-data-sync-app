@@ -9,7 +9,7 @@ const axios = require('axios');
 
 // Configuration
 const config = {
-  apiUrl: 'https://your-subdomain.yourdomain.com/api',
+  apiUrl: 'https://your-domain.com/api/v1',
   apiKey: 'sk_your_api_key_here',
   apiSecret: 'your_api_secret_here'
 };
@@ -23,6 +23,23 @@ const shopifyApi = axios.create({
     'Content-Type': 'application/json'
   }
 });
+```
+
+## Resource Discovery
+
+### Get All Available Resources
+This is the recommended first call to see what your API key is allowed to access.
+```javascript
+async function discoverResources() {
+  try {
+    const response = await shopifyApi.get('/resources');
+    console.log('Available resources:', response.data.resources);
+    return response.data.resources;
+  } catch (error) {
+    console.error('Discovery failed:', error.response?.data);
+    throw error;
+  }
+}
 ```
 
 ## Orders Management
@@ -525,7 +542,7 @@ class ShopifyPOSIntegration {
 
 // Usage
 const pos = new ShopifyPOSIntegration(
-  'https://your-app.com/api',
+  'https://your-domain.com/api/v1',
   'sk_your_key',
   'your_secret'
 );

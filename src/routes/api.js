@@ -428,22 +428,16 @@ router.get('/stats', async (req, res) => {
  * GET /api/v1/resources - List available resources based on scopes
  */
 router.get('/v1/resources', (req, res) => {
-  const resourceMap = {
-    'read_orders': 'orders',
-    'read_customers': 'customers',
-    'read_products': 'products',
-    'read_inventory': 'inventory',
-    'read_fulfillments': 'fulfillments',
-    'read_locations': 'locations'
-  };
-
   const available = (req.scopes || [])
-    .filter(s => resourceMap[s])
-    .map(s => ({
-      resource: resourceMap[s],
-      endpoint: `/api/v1/${resourceMap[s]}`,
-      scope: s
-    }));
+    .filter(s => s.startsWith('read_'))
+    .map(s => {
+      const resource = s.replace('read_', '');
+      return {
+        resource: resource,
+        endpoint: `/api/v1/${resource}`,
+        scope: s
+      };
+    });
 
   res.json({ success: true, resources: available });
 });
@@ -459,14 +453,16 @@ router.get('/v1/:resource', async (req, res) => {
     'products': 'read_products',
     'inventory': 'read_inventory',
     'fulfillments': 'read_fulfillments',
-    'locations': 'read_locations'
+    'fulfillment_orders': 'read_fulfillments',
+    'locations': 'read_locations',
+    'returns': 'read_returns',
+    'discounts': 'read_discounts',
+    'price_rules': 'read_price_rules',
+    'draft_orders': 'read_draft_orders'
   };
 
-  const requiredScope = scopeMap[resource];
-
-  if (!requiredScope) {
-    return res.status(404).json({ error: 'Unknown resource', message: `Resource '${resource}' is not recognized.` });
-  }
+  // Infer scope if not in map (e.g., 'gift_cards' -> 'read_gift_cards')
+  const requiredScope = scopeMap[resource] || `read_${resource}`;
 
   if (!req.scopes || !req.scopes.includes(requiredScope)) {
     return res.status(403).json({
@@ -484,14 +480,41 @@ router.get('/v1/:resource', async (req, res) => {
       case 'orders': result = await shopify.getOrders(req.query); break;
       case 'customers': result = await shopify.getCustomers(req.query); break;
       case 'products': result = await shopify.getProducts(req.query); break;
-      case 'inventory': result = await shopify.getInventoryLevels(req.query); break;
+      case 'inventory':
+        // If location_id is missing, auto-fetch and use primary location
+        if (!req.query.location_ids && !req.query.location_id) {
+          const locations = await shopify.getLocations();
+          if (locations && locations.locations && locations.locations.length > 0) {
+            const primaryLocation = locations.locations[0];
+            req.query.location_ids = primaryLocation.id;
+          } else {
+            return res.status(422).json({ error: 'No locations found', message: 'Shopify store must have at least one location for inventory.' });
+          }
+        }
+        result = await shopify.getInventoryLevels(req.query);
+        break;
       case 'locations': result = await shopify.getLocations(); break;
-      case 'fulfillments':
+      case 'fulfillment_orders':
         if (!req.query.order_id) return res.status(400).json({ error: 'Missing order_id' });
+        result = await shopify.getFulfillmentOrders(req.query.order_id);
+        break;
+      case 'fulfillments':
+        if (!req.query.order_id) {
+          return res.status(400).json({
+            error: 'Missing order_id',
+            message: 'Please provide an order_id parameter, e.g., /api/v1/fulfillments?order_id=123456789'
+          });
+        }
         result = await shopify.getFulfillments(req.query.order_id);
         break;
+      case 'returns': result = await shopify.getReturns(req.query); break;
+      case 'price_rules': result = await shopify.getPriceRules(req.query); break;
+      case 'discounts': result = await shopify.getDiscounts(req.query); break;
+      case 'draft_orders': result = await shopify.getDraftOrders(req.query); break;
       default:
-        throw new Error('Handler not implemented');
+        // Future-proof fallback for other resources
+        result = await shopify.getResource(resource, req.query);
+        break;
     }
 
     res.json({ success: true, resource, data: result });
@@ -511,9 +534,6 @@ router.get('/v1/:resource', async (req, res) => {
  */
 router.get('/test-connection', async (req, res) => {
   try {
-    console.log('=== Testing Shopify Connection ===');
-    console.log('Shop:', req.shopDomain);
-    console.log('Scopes:', req.scopes);
 
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const shopInfo = await shopify.request('GET', '/shop.json');

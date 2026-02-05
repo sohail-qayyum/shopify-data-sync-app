@@ -90,6 +90,22 @@ class ShopifyAPI {
     return this.request('PUT', `/orders/${orderId}.json`, { order: orderData });
   }
 
+  // Draft Orders
+  async getDraftOrders(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString ? `/draft_orders.json?${queryString}` : '/draft_orders.json';
+    return this.request('GET', endpoint);
+  }
+
+  /**
+   * Generic Resource Fetcher (for future-proofing)
+   */
+  async getResource(resource, params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString ? `/${resource}.json?${queryString}` : `/${resource}.json`;
+    return this.request('GET', endpoint);
+  }
+
   // Customers
   async getCustomers(params = {}) {
     const queryString = new URLSearchParams(params).toString();
@@ -151,6 +167,31 @@ class ShopifyAPI {
 
   async createFulfillment(orderId, fulfillmentData) {
     return this.request('POST', `/orders/${orderId}/fulfillments.json`, { fulfillment: fulfillmentData });
+  }
+
+  // Fulfillment Orders
+  async getFulfillmentOrders(orderId) {
+    return this.request('GET', `/orders/${orderId}/fulfillment_orders.json`);
+  }
+
+  // Returns
+  async getReturns(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString ? `/returns.json?${queryString}` : '/returns.json';
+    return this.request('GET', endpoint);
+  }
+
+  // Discounts & Price Rules
+  async getPriceRules(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString ? `/price_rules.json?${queryString}` : '/price_rules.json';
+    return this.request('GET', endpoint);
+  }
+
+  async getDiscounts(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString ? `/discounts.json?${queryString}` : '/discounts.json';
+    return this.request('GET', endpoint);
   }
 
   // Webhooks

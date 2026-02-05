@@ -11,7 +11,15 @@ module.exports = {
   app: {
     url: process.env.APP_URL,
     port: process.env.PORT || 3000,
-    env: process.env.NODE_ENV || 'development'
+    env: process.env.NODE_ENV || 'development',
+    supportWebhookUrl: process.env.SUPPORT_WEBHOOK_URL,
+    supportEmail: process.env.SUPPORT_EMAIL,
+    smtp: {
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT || 587,
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
   },
 
   database: {
