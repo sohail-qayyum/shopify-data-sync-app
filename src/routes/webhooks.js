@@ -264,4 +264,3 @@ router.post('/app-uninstalled', async (req, res) => {
 });
 
 module.exports = router;
-助力
