@@ -56,23 +56,24 @@ router.get('/orders', requireScope('read_orders'), async (req, res) => {
     console.log('=== GET /api/orders ===');
     console.log('Shop:', req.shopDomain);
     console.log('Query:', req.query);
-    
+
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getOrders(req.query);
-    
+
     console.log('✅ Fetched', result.orders?.length || 0, 'orders');
-    
+
     await logOperation(req, 'READ', 'order', null, 'success', { count: result.orders?.length || 0 });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Orders fetch failed:', error.message);
     console.error('Shopify error:', error.response?.data);
-    
-    await logOperation(req, 'READ', 'order', null, 'error', { error: error.message });
-    res.status(500).json({ 
-      error: 'Failed to fetch orders', 
+
+    await logOperation(req, 'READ', 'order', null, 'error', { error: error.message, shopifyError: error.shopifyMessage });
+    res.status(500).json({
+      error: 'Failed to fetch orders',
       message: error.message,
+      shopifyError: error.shopifyMessage,
       details: error.response?.data
     });
   }
@@ -85,14 +86,18 @@ router.get('/orders/:id', requireScope('read_orders'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getOrder(req.params.id);
-    
+
     await logOperation(req, 'READ', 'order', req.params.id, 'success');
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Order fetch failed:', error.message);
-    await logOperation(req, 'READ', 'order', req.params.id, 'error', { error: error.message });
-    res.status(500).json({ error: 'Failed to fetch order', message: error.message });
+    await logOperation(req, 'READ', 'order', req.params.id, 'error', { error: error.message, shopifyError: error.shopifyMessage });
+    res.status(500).json({
+      error: 'Failed to fetch order',
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
   }
 });
 
@@ -103,14 +108,18 @@ router.put('/orders/:id', requireScope('write_orders'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.updateOrder(req.params.id, req.body);
-    
+
     await logOperation(req, 'UPDATE', 'order', req.params.id, 'success', { updates: req.body });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Order update failed:', error.message);
-    await logOperation(req, 'UPDATE', 'order', req.params.id, 'error', { error: error.message });
-    res.status(500).json({ error: 'Failed to update order', message: error.message });
+    await logOperation(req, 'UPDATE', 'order', req.params.id, 'error', { error: error.message, shopifyError: error.shopifyMessage });
+    res.status(500).json({
+      error: 'Failed to update order',
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
   }
 });
 
@@ -124,11 +133,11 @@ router.get('/customers', requireScope('read_customers'), async (req, res) => {
     console.log('=== GET /api/customers ===');
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getCustomers(req.query);
-    
+
     console.log('✅ Fetched', result.customers?.length || 0, 'customers');
-    
+
     await logOperation(req, 'READ', 'customer', null, 'success', { count: result.customers?.length || 0 });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Customers fetch failed:', error.message);
@@ -144,9 +153,9 @@ router.get('/customers/:id', requireScope('read_customers'), async (req, res) =>
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getCustomer(req.params.id);
-    
+
     await logOperation(req, 'READ', 'customer', req.params.id, 'success');
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Customer fetch failed:', error.message);
@@ -162,9 +171,9 @@ router.put('/customers/:id', requireScope('write_customers'), async (req, res) =
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.updateCustomer(req.params.id, req.body);
-    
+
     await logOperation(req, 'UPDATE', 'customer', req.params.id, 'success', { updates: req.body });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Customer update failed:', error.message);
@@ -183,11 +192,11 @@ router.get('/products', requireScope('read_products'), async (req, res) => {
     console.log('=== GET /api/products ===');
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getProducts(req.query);
-    
+
     console.log('✅ Fetched', result.products?.length || 0, 'products');
-    
+
     await logOperation(req, 'READ', 'product', null, 'success', { count: result.products?.length || 0 });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Products fetch failed:', error.message);
@@ -203,9 +212,9 @@ router.get('/products/:id', requireScope('read_products'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getProduct(req.params.id);
-    
+
     await logOperation(req, 'READ', 'product', req.params.id, 'success');
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Product fetch failed:', error.message);
@@ -221,9 +230,9 @@ router.put('/products/:id', requireScope('write_products'), async (req, res) => 
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.updateProduct(req.params.id, req.body);
-    
+
     await logOperation(req, 'UPDATE', 'product', req.params.id, 'success', { updates: req.body });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Product update failed:', error.message);
@@ -239,9 +248,9 @@ router.post('/products', requireScope('write_products'), async (req, res) => {
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.createProduct(req.body);
-    
+
     await logOperation(req, 'CREATE', 'product', result.product?.id, 'success', { product: req.body });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Product create failed:', error.message);
@@ -260,11 +269,11 @@ router.get('/inventory', requireScope('read_inventory'), async (req, res) => {
     console.log('=== GET /api/inventory ===');
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getInventoryLevels(req.query);
-    
+
     console.log('✅ Fetched inventory levels');
-    
+
     await logOperation(req, 'READ', 'inventory', null, 'success', { count: result.inventory_levels?.length || 0 });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Inventory fetch failed:', error.message);
@@ -279,28 +288,28 @@ router.get('/inventory', requireScope('read_inventory'), async (req, res) => {
 router.post('/inventory/sync', requireScope('write_inventory'), async (req, res) => {
   try {
     const { inventory_item_id, location_id, available } = req.body;
-    
+
     if (!inventory_item_id || !location_id || available === undefined) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: inventory_item_id, location_id, available' 
+      return res.status(400).json({
+        error: 'Missing required fields: inventory_item_id, location_id, available'
       });
     }
-    
+
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.updateInventoryLevel(inventory_item_id, location_id, available);
-    
+
     console.log('✅ Inventory synced:', inventory_item_id);
-    
-    await logOperation(req, 'UPDATE', 'inventory', inventory_item_id, 'success', { 
-      location_id, 
-      available 
+
+    await logOperation(req, 'UPDATE', 'inventory', inventory_item_id, 'success', {
+      location_id,
+      available
     });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Inventory sync failed:', error.message);
-    await logOperation(req, 'UPDATE', 'inventory', req.body.inventory_item_id, 'error', { 
-      error: error.message 
+    await logOperation(req, 'UPDATE', 'inventory', req.body.inventory_item_id, 'error', {
+      error: error.message
     });
     res.status(500).json({ error: 'Failed to sync inventory', message: error.message });
   }
@@ -316,11 +325,11 @@ router.get('/locations', requireScope('read_locations'), async (req, res) => {
     console.log('=== GET /api/locations ===');
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getLocations();
-    
+
     console.log('✅ Fetched', result.locations?.length || 0, 'locations');
-    
+
     await logOperation(req, 'READ', 'location', null, 'success', { count: result.locations?.length || 0 });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Locations fetch failed:', error.message);
@@ -338,9 +347,9 @@ router.get('/orders/:orderId/fulfillments', requireScope('read_fulfillments'), a
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.getFulfillments(req.params.orderId);
-    
+
     await logOperation(req, 'READ', 'fulfillment', null, 'success', { order_id: req.params.orderId });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Fulfillments fetch failed:', error.message);
@@ -356,13 +365,13 @@ router.post('/orders/:orderId/fulfillments', requireScope('write_fulfillments'),
   try {
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const result = await shopify.createFulfillment(req.params.orderId, req.body);
-    
+
     console.log('✅ Fulfillment created for order:', req.params.orderId);
-    
-    await logOperation(req, 'CREATE', 'fulfillment', result.fulfillment?.id, 'success', { 
-      order_id: req.params.orderId 
+
+    await logOperation(req, 'CREATE', 'fulfillment', result.fulfillment?.id, 'success', {
+      order_id: req.params.orderId
     });
-    
+
     res.json(result);
   } catch (error) {
     console.error('❌ Fulfillment create failed:', error.message);
@@ -380,9 +389,9 @@ router.get('/logs', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;
     const offset = parseInt(req.query.offset) || 0;
-    
+
     const logs = await syncLogService.getLogsByStore(req.storeId, limit, offset);
-    
+
     res.json({ logs, limit, offset });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch logs', message: error.message });
@@ -396,7 +405,7 @@ router.get('/stats', async (req, res) => {
   try {
     const hours = parseInt(req.query.hours) || 24;
     const summary = await syncLogService.getActivitySummary(req.storeId, hours);
-    
+
     res.json({ summary, hours });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch stats', message: error.message });
@@ -413,10 +422,10 @@ router.get('/test-connection', async (req, res) => {
     console.log('=== Testing Shopify Connection ===');
     console.log('Shop:', req.shopDomain);
     console.log('Scopes:', req.scopes);
-    
+
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
     const shopInfo = await shopify.request('GET', '/shop.json');
-    
+
     res.json({
       success: true,
       shop: shopInfo.shop.name,
@@ -429,7 +438,8 @@ router.get('/test-connection', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
-      details: error.response?.data,
+      shopifyError: error.shopifyMessage || error.response?.data,
+      statusCode: error.response?.status,
       message: 'Connection failed. Please reinstall the app or check your access token.'
     });
   }
@@ -447,15 +457,15 @@ router.get('/debug-token', async (req, res) => {
     console.log('Access Token preview:', req.accessToken ? req.accessToken.substring(0, 15) + '...' : 'MISSING');
     console.log('API Key ID:', req.apiKeyId);
     console.log('Scopes:', req.scopes);
-    
+
     // Try to call Shopify shop endpoint (simplest call)
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
-    
+
     console.log('Base URL:', shopify.baseUrl);
     console.log('Attempting to call /shop.json...');
-    
+
     const shopInfo = await shopify.request('GET', '/shop.json');
-    
+
     res.json({
       success: true,
       message: 'Access token is valid!',
@@ -475,7 +485,7 @@ router.get('/debug-token', async (req, res) => {
     console.error('Error:', error.message);
     console.error('Response:', error.response?.data);
     console.error('Status:', error.response?.status);
-    
+
     res.status(500).json({
       success: false,
       error: error.message,

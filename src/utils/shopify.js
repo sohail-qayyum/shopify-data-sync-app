@@ -7,19 +7,23 @@ class ShopifyAPI {
     this.shop = shop;
     this.accessToken = accessToken;
     this.apiVersion = config.shopify.apiVersion;
-    this.baseUrl = `https://${shop}/admin/api/${this.apiVersion}`;
+    this.baseUrl = `https://${shop.replace(/\/+$/, '')}/admin/api/${this.apiVersion}`;
   }
 
- /**
- * Make API request to Shopify
- */
-async request(method, endpoint, data = null) {
-  try {
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = {
-      'X-Shopify-Access-Token': this.accessToken,
-      'Content-Type': 'application/json'
-    };
+  /**
+   * Make API request to Shopify
+   */
+  async request(method, endpoint, data = null) {
+    try {
+      // Ensure endpoint starts with a slash and handle potential double slashes
+      const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      const url = `${this.baseUrl}${cleanEndpoint}`.replace(/([^:]\/)\/+/g, "$1");
+      
+      const headers = {
+        'X-Shopify-Access-Token': this.accessToken,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
 
     console.log('🔵 Shopify API Request:');
     console.log('  Method:', method);
@@ -35,24 +39,36 @@ async request(method, endpoint, data = null) {
       data
     });
 
-    console.log('✅ Shopify API Success:', response.status);
-    return response.data;
-  } catch (error) {
-    console.error('❌ Shopify API Error Details:');
-    console.error('  Status:', error.response?.status);
-    console.error('  Status Text:', error.response?.statusText);
-    console.error('  Error Data:', JSON.stringify(error.response?.data, null, 2));
-    console.error('  Request URL:', error.config?.url);
-    console.error('  Request Method:', error.config?.method);
-    
-    throw error;
+      console.log('✅ Shopify API Success:', response.status);
+      return response.data;
+    } catch (error) {
+      const errorDetails = {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url,
+        method: error.config?.method
+      };
+
+      console.error('❌ Shopify API Error Details:', JSON.stringify(errorDetails, null, 2));
+      
+      // Enhance the error object with Shopify's specific error message if available
+      if (error.response?.data?.errors) {
+        const shopifyErrors = error.response.data.errors;
+        error.shopifyMessage = typeof shopifyErrors === 'string' 
+          ? shopifyErrors 
+          : JSON.stringify(shopifyErrors);
+      }
+      
+      throw error;
+    }
   }
-}
 
   // Orders
   async getOrders(params = {}) {
     const queryString = new URLSearchParams(params).toString();
-    return this.request('GET', `/orders.json?${queryString}`);
+    const endpoint = queryString ? `/orders.json?${queryString}` : '/orders.json';
+    return this.request('GET', endpoint);
   }
 
   async getOrder(orderId) {
@@ -66,7 +82,8 @@ async request(method, endpoint, data = null) {
   // Customers
   async getCustomers(params = {}) {
     const queryString = new URLSearchParams(params).toString();
-    return this.request('GET', `/customers.json?${queryString}`);
+    const endpoint = queryString ? `/customers.json?${queryString}` : '/customers.json';
+    return this.request('GET', endpoint);
   }
 
   async getCustomer(customerId) {
@@ -80,7 +97,8 @@ async request(method, endpoint, data = null) {
   // Products
   async getProducts(params = {}) {
     const queryString = new URLSearchParams(params).toString();
-    return this.request('GET', `/products.json?${queryString}`);
+    const endpoint = queryString ? `/products.json?${queryString}` : '/products.json';
+    return this.request('GET', endpoint);
   }
 
   async getProduct(productId) {
@@ -98,7 +116,8 @@ async request(method, endpoint, data = null) {
   // Inventory
   async getInventoryLevels(params = {}) {
     const queryString = new URLSearchParams(params).toString();
-    return this.request('GET', `/inventory_levels.json?${queryString}`);
+    const endpoint = queryString ? `/inventory_levels.json?${queryString}` : '/inventory_levels.json';
+    return this.request('GET', endpoint);
   }
 
   async updateInventoryLevel(inventoryItemId, locationId, available) {
