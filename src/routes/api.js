@@ -422,6 +422,88 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// ===== DYNAMIC RESOURCE ACCESS (v1) =====
+
+/**
+ * GET /api/v1/resources - List available resources based on scopes
+ */
+router.get('/v1/resources', (req, res) => {
+  const resourceMap = {
+    'read_orders': 'orders',
+    'read_customers': 'customers',
+    'read_products': 'products',
+    'read_inventory': 'inventory',
+    'read_fulfillments': 'fulfillments',
+    'read_locations': 'locations'
+  };
+
+  const available = (req.scopes || [])
+    .filter(s => resourceMap[s])
+    .map(s => ({
+      resource: resourceMap[s],
+      endpoint: `/api/v1/${resourceMap[s]}`,
+      scope: s
+    }));
+
+  res.json({ success: true, resources: available });
+});
+
+/**
+ * GET /api/v1/:resource - Dynamic resource fetcher
+ */
+router.get('/v1/:resource', async (req, res) => {
+  const { resource } = req.params;
+  const scopeMap = {
+    'orders': 'read_orders',
+    'customers': 'read_customers',
+    'products': 'read_products',
+    'inventory': 'read_inventory',
+    'fulfillments': 'read_fulfillments',
+    'locations': 'read_locations'
+  };
+
+  const requiredScope = scopeMap[resource];
+
+  if (!requiredScope) {
+    return res.status(404).json({ error: 'Unknown resource', message: `Resource '${resource}' is not recognized.` });
+  }
+
+  if (!req.scopes || !req.scopes.includes(requiredScope)) {
+    return res.status(403).json({
+      error: 'Insufficient permissions',
+      message: `Your API key lacks the '${requiredScope}' scope required for '${resource}'`,
+      requiredScope
+    });
+  }
+
+  try {
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    let result;
+
+    switch (resource) {
+      case 'orders': result = await shopify.getOrders(req.query); break;
+      case 'customers': result = await shopify.getCustomers(req.query); break;
+      case 'products': result = await shopify.getProducts(req.query); break;
+      case 'inventory': result = await shopify.getInventoryLevels(req.query); break;
+      case 'locations': result = await shopify.getLocations(); break;
+      case 'fulfillments':
+        if (!req.query.order_id) return res.status(400).json({ error: 'Missing order_id' });
+        result = await shopify.getFulfillments(req.query.order_id);
+        break;
+      default:
+        throw new Error('Handler not implemented');
+    }
+
+    res.json({ success: true, resource, data: result });
+  } catch (error) {
+    res.status(500).json({
+      error: `Failed to fetch ${resource}`,
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
+  }
+});
+
 // ===== TEST CONNECTION =====
 
 /**

@@ -26,21 +26,21 @@ router.use('/api/admin/*', (req, res, next) => {
  */
 router.get('/admin', (req, res) => {
   const { shop, token } = req.query;
-  
+
   if (!shop) {
     return res.status(400).send('Missing shop parameter. Please install the app first.');
   }
-  
+
   // If no token or invalid token, redirect to OAuth
   if (!token || token === 'undefined' || token === 'null') {
     console.log('No valid token found, redirecting to OAuth for shop:', shop);
     return res.redirect(`/auth?shop=${shop}`);
   }
-  
+
   // Set headers to allow embedding
   res.setHeader('Content-Security-Policy', "frame-ancestors https://*.myshopify.com https://admin.shopify.com");
   res.removeHeader('X-Frame-Options');
-  
+
   // Serve embedded admin page
   res.send(`
     <!DOCTYPE html>
@@ -487,7 +487,19 @@ router.get('/admin', (req, res) => {
             }).join('');
           }
           
-          document.getElementById('app').innerHTML = '<div class="stats"><div class="stat-card"><div class="stat-label">Connected Store</div><div class="stat-value" style="font-size: 18px;">' + SHOP + '</div></div><div class="stat-card"><div class="stat-label">Active Keys</div><div class="stat-value">' + activeKeys + '</div></div><div class="stat-card"><div class="stat-label">Total Keys</div><div class="stat-value">' + totalKeys + '</div></div></div><div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin: 0;">📋 API Keys</h2><button class="button" onclick="openCreateModal()">+ Create New API Key</button></div><p class="text-muted">API keys allow your custom inventory portal to securely access Shopify data in real-time.</p><div style="margin-top: 24px;">' + apiKeysHtml + '</div></div><div class="card"><h2>🔌 Available API Endpoints</h2><p class="text-muted">Use these endpoints in your portal with your API credentials.</p><div class="credential-box" style="margin: 16px 0;"><div class="credential-label">Base URL</div><div class="credential-text">' + API_URL + '/api</div></div><div class="endpoints"><div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/orders</code> — Fetch all orders</div><div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/orders/:id</code> — Get specific order</div><div class="endpoint"><span class="endpoint-method method-put">PUT</span><code>/orders/:id</code> — Update order tags/status</div><div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/customers</code> — Fetch all customers</div><div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/products</code> — Fetch all products</div><div class="endpoint"><span class="endpoint-method method-put">PUT</span><code>/products/:id</code> — Update product</div><div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/inventory</code> — Get inventory levels</div><div class="endpoint"><span class="endpoint-method method-post">POST</span><code>/inventory/sync</code> — Sync inventory to Shopify</div></div><p class="text-muted mt-2"><strong>Authentication:</strong> Include <code>X-API-Key</code> and <code>X-API-Secret</code> headers in all requests.</p></div><div class="card"><div class="support-box"><div class="support-icon">💬</div><h2 style="margin-top: 0;">Need Help?</h2><p class="text-muted">Have questions, feedback, or issues? Our support team is here to help!</p><button class="button" onclick="openSupportModal()" style="margin-top: 12px;">Contact Support</button></div></div>';
+          document.getElementById('app').innerHTML = '<div class="stats"><div class="stat-card"><div class="stat-label">Connected Store</div><div class="stat-value" style="font-size: 18px;">' + SHOP + '</div></div><div class="stat-card"><div class="stat-label">Active Keys</div><div class="stat-value">' + activeKeys + '</div></div><div class="stat-card"><div class="stat-label">Total Keys</div><div class="stat-value">' + totalKeys + '</div></div></div>' +
+            '<div class="card"><div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;"><h2 style="margin: 0;">📋 API Keys</h2><button class="button" onclick="openCreateModal()">+ Create New API Key</button></div><p class="text-muted">API keys allow your custom inventory portal to securely access Shopify data in real-time.</p><div style="margin-top: 24px;">' + apiKeysHtml + '</div></div>' +
+            '<div class="card"><h2>🔌 Available API Endpoints</h2><p class="text-muted">These endpoints are automatically adjusted based on your store permissions.</p>' +
+            '<div class="credential-box" style="margin: 16px 0;"><div class="credential-label">Base URL</div><div class="credential-text">' + API_URL + '/api/v1</div></div>' +
+            '<div class="endpoints">' +
+              AVAILABLE_SCOPES.filter(function(s) { return storeData.scopes.includes(s.value); }).map(function(s) {
+                const resource = s.value.replace('read_', '').replace('write_', '');
+                return '<div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/' + resource + '</code> — ' + s.description + '</div>';
+              }).join('') +
+              '<div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/resources</code> — Discover all available endpoints</div>' +
+            '</div>' +
+            '<p class="text-muted mt-2"><strong>Authentication:</strong> Include <code>X-API-Key</code> and <code>X-API-Secret</code> headers in all requests.</p></div>' +
+            '<div class="card"><div class="support-box"><div class="support-icon">💬</div><h2 style="margin-top: 0;">Need Help?</h2><p class="text-muted">Have questions, feedback, or issues? Our support team is here to help!</p><button class="button" onclick="openSupportModal()" style="margin-top: 12px;">Contact Support</button></div></div>';
         }
 
         // Close modals when clicking overlay
@@ -560,31 +572,31 @@ router.get('/api/admin/store', async (req, res) => {
 router.post('/api/admin/api-keys', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   const { name, scopes } = req.body;
-  
+
   if (!token) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
-  
+
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
   }
-  
+
   if (!scopes) {
     return res.status(400).json({ error: 'Scopes are required' });
   }
-  
+
   try {
     const decoded = jwt.verify(token, config.security.jwtSecret);
     const store = await storeService.getStoreById(decoded.storeId);
-    
+
     if (!store) {
       return res.status(404).json({ error: 'Store not found' });
     }
-    
+
     // Use provided scopes or default to store scopes
     const apiKeyScopes = scopes || store.scopes;
     const apiKey = await apiKeyService.createApiKey(store.id, name, apiKeyScopes);
-    
+
     res.json(apiKey);
   } catch (error) {
     console.error('Error creating API key:', error);
