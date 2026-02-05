@@ -44,8 +44,12 @@ app.use(cors({
 // Cookie parser
 app.use(cookieParser());
 
-// Body parser
-app.use(express.json());
+// Body parser - with raw body capture for webhooks
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString('utf8');
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // Logging middleware (helpful for debugging)
@@ -56,7 +60,7 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
+  res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     version: '1.0.0'
@@ -95,7 +99,7 @@ app.use((err, req, res, next) => {
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ 
+  res.status(404).json({
     error: 'Not found',
     path: req.path
   });

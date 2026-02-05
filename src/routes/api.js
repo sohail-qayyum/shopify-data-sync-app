@@ -7,8 +7,18 @@ const syncLogService = require('../services/syncLogService');
 // Apply rate limiting to all API routes
 router.use(apiLimiter);
 
-// Apply API key authentication to all routes
-router.use(verifyApiKey);
+// Apply API key authentication to all routes (except health)
+router.use((req, res, next) => {
+  if (req.path === '/health') return next();
+  verifyApiKey(req, res, next);
+});
+
+/**
+ * GET /api/health - Health check
+ */
+router.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'api' });
+});
 
 /**
  * Helper function to check scope
@@ -477,6 +487,7 @@ router.get('/debug-token', async (req, res) => {
         apiVersion: shopify.apiVersion,
         baseUrl: shopify.baseUrl,
         hasAccessToken: !!req.accessToken,
+        tokenType: req.accessToken?.startsWith('shpca_') ? 'Custom App' : 'OAuth',
         scopes: req.scopes
       }
     });

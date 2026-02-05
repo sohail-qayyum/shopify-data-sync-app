@@ -18,26 +18,31 @@ class ShopifyAPI {
       // Ensure endpoint starts with a slash and handle potential double slashes
       const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       const url = `${this.baseUrl}${cleanEndpoint}`.replace(/([^:]\/)\/+/g, "$1");
-      
+
       const headers = {
         'X-Shopify-Access-Token': this.accessToken,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'User-Agent': 'ShopifyDataSyncApp/1.0.0 (Node.js)'
       };
 
-    console.log('🔵 Shopify API Request:');
-    console.log('  Method:', method);
-    console.log('  URL:', url);
-    console.log('  Endpoint:', endpoint);
-    console.log('  Has Access Token:', !!this.accessToken);
-    console.log('  Token Preview:', this.accessToken ? this.accessToken.substring(0, 10) + '...' : 'MISSING');
+      // Only add Content-Type if there is a body
+      if (['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
+        headers['Content-Type'] = 'application/json';
+      }
 
-    const response = await axios({
-      method,
-      url,
-      headers,
-      data
-    });
+      console.log('🔵 Shopify API Request:');
+      console.log('  Method:', method);
+      console.log('  URL:', url);
+      console.log('  Endpoint:', endpoint);
+      console.log('  Has Access Token:', !!this.accessToken);
+      console.log('  Token Preview:', this.accessToken ? this.accessToken.substring(0, 10) + '...' : 'MISSING');
+
+      const response = await axios({
+        method,
+        url,
+        headers,
+        data
+      });
 
       console.log('✅ Shopify API Success:', response.status);
       return response.data;
@@ -51,15 +56,21 @@ class ShopifyAPI {
       };
 
       console.error('❌ Shopify API Error Details:', JSON.stringify(errorDetails, null, 2));
-      
+
+      // Log more context for 400 errors
+      if (error.response?.status === 400) {
+        console.error('  Raw Response Body:', JSON.stringify(error.response.data));
+        console.error('  Response Headers:', JSON.stringify(error.response.headers));
+      }
+
       // Enhance the error object with Shopify's specific error message if available
       if (error.response?.data?.errors) {
         const shopifyErrors = error.response.data.errors;
-        error.shopifyMessage = typeof shopifyErrors === 'string' 
-          ? shopifyErrors 
+        error.shopifyMessage = typeof shopifyErrors === 'string'
+          ? shopifyErrors
           : JSON.stringify(shopifyErrors);
       }
-      
+
       throw error;
     }
   }
@@ -170,7 +181,7 @@ function verifyWebhook(data, hmacHeader) {
     .createHmac('sha256', config.shopify.apiSecret)
     .update(data, 'utf8')
     .digest('base64');
-  
+
   return hash === hmacHeader;
 }
 
@@ -179,17 +190,17 @@ function verifyWebhook(data, hmacHeader) {
  */
 function verifyShopifyRequest(query) {
   const { hmac, ...params } = query;
-  
+
   const message = Object.keys(params)
     .sort()
     .map(key => `${key}=${params[key]}`)
     .join('&');
-  
+
   const hash = crypto
     .createHmac('sha256', config.shopify.apiSecret)
     .update(message)
     .digest('hex');
-  
+
   return hash === hmac;
 }
 
@@ -219,7 +230,7 @@ async function getAccessToken(shop, code) {
       client_secret: config.shopify.apiSecret,
       code
     });
-    
+
     return response.data;
   } catch (error) {
     console.error('Error getting access token:', error);

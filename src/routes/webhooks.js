@@ -7,13 +7,8 @@ const config = require('../config');
 
 /**
  * Middleware to capture raw body for HMAC verification
- * IMPORTANT: This must be BEFORE any other body parsing
+ * (Captured globally in server.js)
  */
-router.use(express.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString('utf8');
-  }
-}));
 
 /**
  * Middleware to verify webhook authenticity
@@ -21,32 +16,37 @@ router.use(express.json({
 async function verifyWebhookMiddleware(req, res, next) {
   const hmac = req.get('X-Shopify-Hmac-SHA256');
   const shop = req.get('X-Shopify-Shop-Domain');
-  
+
   if (!hmac || !shop) {
     console.error('❌ Webhook missing HMAC or shop domain');
     return res.status(401).send('Unauthorized');
   }
-  
+
   // Use raw body for HMAC verification
+  if (!req.rawBody) {
+    console.error('❌ Webhook rawBody is missing. Check server.js middleware.');
+    return res.status(500).send('Internal server error');
+  }
+
   const hash = crypto
     .createHmac('sha256', config.shopify.apiSecret)
     .update(req.rawBody, 'utf8')
     .digest('base64');
-  
+
   if (hash !== hmac) {
     console.error('❌ Invalid webhook HMAC for shop:', shop);
     return res.status(401).send('Unauthorized');
   }
-  
+
   console.log('✅ Webhook HMAC verified for:', shop);
-  
+
   // Get store from database
   const store = await storeService.getStoreByDomain(shop);
   if (!store) {
     console.error('❌ Store not found:', shop);
     return res.status(404).send('Store not found');
   }
-  
+
   req.store = store;
   next();
 }
@@ -81,44 +81,44 @@ async function logWebhookEvent(storeId, topic, resourceId, data) {
 router.post('/orders-create', async (req, res) => {
   const order = req.body;
   console.log(`📦 Order created: ${order.id} for ${req.store.shop_domain}`);
-  
-  await logWebhookEvent(req.store.id, 'orders/create', order.id, { 
+
+  await logWebhookEvent(req.store.id, 'orders/create', order.id, {
     order_number: order.order_number,
     total_price: order.total_price,
     customer: order.customer?.email
   });
-  
+
   res.status(200).send('OK');
 });
 
 /**
  * POST /webhooks/orders-updated
  */
-router.post('/orders-updated', async (req, res) => {
+router.post('/webhooks/orders-updated', async (req, res) => {
   const order = req.body;
   console.log(`📝 Order updated: ${order.id} for ${req.store.shop_domain}`);
-  
+
   await logWebhookEvent(req.store.id, 'orders/updated', order.id, {
     order_number: order.order_number,
     financial_status: order.financial_status,
     fulfillment_status: order.fulfillment_status
   });
-  
+
   res.status(200).send('OK');
 });
 
 /**
  * POST /webhooks/orders-cancelled
  */
-router.post('/orders-cancelled', async (req, res) => {
+router.post('/webhooks/orders-cancelled', async (req, res) => {
   const order = req.body;
   console.log(`❌ Order cancelled: ${order.id} for ${req.store.shop_domain}`);
-  
+
   await logWebhookEvent(req.store.id, 'orders/cancelled', order.id, {
     order_number: order.order_number,
     cancelled_at: order.cancelled_at
   });
-  
+
   res.status(200).send('OK');
 });
 
@@ -130,12 +130,12 @@ router.post('/orders-cancelled', async (req, res) => {
 router.post('/customers-create', async (req, res) => {
   const customer = req.body;
   console.log(`👤 Customer created: ${customer.id} for ${req.store.shop_domain}`);
-  
+
   await logWebhookEvent(req.store.id, 'customers/create', customer.id, {
     email: customer.email,
     name: `${customer.first_name} ${customer.last_name}`
   });
-  
+
   res.status(200).send('OK');
 });
 
@@ -145,12 +145,12 @@ router.post('/customers-create', async (req, res) => {
 router.post('/customers-update', async (req, res) => {
   const customer = req.body;
   console.log(`👤 Customer updated: ${customer.id} for ${req.store.shop_domain}`);
-  
+
   await logWebhookEvent(req.store.id, 'customers/update', customer.id, {
     email: customer.email,
     updated_at: customer.updated_at
   });
-  
+
   res.status(200).send('OK');
 });
 
@@ -162,12 +162,12 @@ router.post('/customers-update', async (req, res) => {
 router.post('/products-create', async (req, res) => {
   const product = req.body;
   console.log(`🛍️ Product created: ${product.id} for ${req.store.shop_domain}`);
-  
+
   await logWebhookEvent(req.store.id, 'products/create', product.id, {
     title: product.title,
     variants_count: product.variants?.length || 0
   });
-  
+
   res.status(200).send('OK');
 });
 
@@ -177,12 +177,12 @@ router.post('/products-create', async (req, res) => {
 router.post('/products-update', async (req, res) => {
   const product = req.body;
   console.log(`🛍️ Product updated: ${product.id} for ${req.store.shop_domain}`);
-  
+
   await logWebhookEvent(req.store.id, 'products/update', product.id, {
     title: product.title,
     status: product.status
   });
-  
+
   res.status(200).send('OK');
 });
 
@@ -192,11 +192,11 @@ router.post('/products-update', async (req, res) => {
 router.post('/products-delete', async (req, res) => {
   const product = req.body;
   console.log(`🗑️ Product deleted: ${product.id} for ${req.store.shop_domain}`);
-  
+
   await logWebhookEvent(req.store.id, 'products/delete', product.id, {
     title: product.title
   });
-  
+
   res.status(200).send('OK');
 });
 
@@ -208,12 +208,12 @@ router.post('/products-delete', async (req, res) => {
 router.post('/inventory_levels-update', async (req, res) => {
   const inventoryLevel = req.body;
   console.log(`📊 Inventory updated: Item ${inventoryLevel.inventory_item_id} for ${req.store.shop_domain}`);
-  
+
   await logWebhookEvent(req.store.id, 'inventory_levels/update', inventoryLevel.inventory_item_id, {
     location_id: inventoryLevel.location_id,
     available: inventoryLevel.available
   });
-  
+
   res.status(200).send('OK');
 });
 
@@ -225,13 +225,13 @@ router.post('/inventory_levels-update', async (req, res) => {
 router.post('/fulfillments-create', async (req, res) => {
   const fulfillment = req.body;
   console.log(`📮 Fulfillment created: ${fulfillment.id} for ${req.store.shop_domain}`);
-  
+
   await logWebhookEvent(req.store.id, 'fulfillments/create', fulfillment.id, {
     order_id: fulfillment.order_id,
     status: fulfillment.status,
     tracking_number: fulfillment.tracking_number
   });
-  
+
   res.status(200).send('OK');
 });
 
@@ -241,12 +241,12 @@ router.post('/fulfillments-create', async (req, res) => {
 router.post('/fulfillments-update', async (req, res) => {
   const fulfillment = req.body;
   console.log(`📮 Fulfillment updated: ${fulfillment.id} for ${req.store.shop_domain}`);
-  
+
   await logWebhookEvent(req.store.id, 'fulfillments/update', fulfillment.id, {
     order_id: fulfillment.order_id,
     status: fulfillment.status
   });
-  
+
   res.status(200).send('OK');
 });
 
@@ -257,10 +257,11 @@ router.post('/fulfillments-update', async (req, res) => {
  */
 router.post('/app-uninstalled', async (req, res) => {
   console.log(`🔴 App uninstalled for ${req.store.shop_domain}`);
-  
+
   await storeService.deactivateStore(req.store.shop_domain);
-  
+
   res.status(200).send('OK');
 });
 
 module.exports = router;
+助力
