@@ -451,11 +451,11 @@ router.get('/admin', (req, res) => {
             
             const data = await response.json();
             
-            storeData = data.store;
+            storeData = data.store; if(typeof storeData.scopes === \"string\") storeData.scopes = storeData.scopes.split(\",\").map(function(s){return s.trim()});
             apiKeys = data.apiKeys || [];
             
             // Dynamically generate AVAILABLE_SCOPES from the store's installed scopes
-            AVAILABLE_SCOPES = storeData.scopes.map(function(s) {
+            AVAILABLE_SCOPES = (Array.isArray(storeData.scopes) ? storeData.scopes : (storeData.scopes ? storeData.scopes.split(',').map(function(s) { return s.trim(); }) : [])).map(function(s) {
               const label = s.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
               let description = 'Access to ' + label;
               if (s.startsWith('read_')) description = 'View ' + label.replace('Read ', '') + ' data';
