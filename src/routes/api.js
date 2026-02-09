@@ -475,11 +475,19 @@ router.get('/v1/:resource', async (req, res) => {
   // Infer scope if not in map (e.g., 'gift_cards' -> 'read_gift_cards')
   const requiredScope = scopeMap[resource] || `read_${resource}`;
 
-  if (!req.scopes || !req.scopes.includes(requiredScope)) {
+  // Check if user has the required scope OR the corresponding write scope
+  const writeScope = requiredScope.replace('read_', 'write_');
+  const hasPermission = req.scopes && (
+    req.scopes.includes(requiredScope) ||
+    req.scopes.includes(writeScope)
+  );
+
+  if (!hasPermission) {
     return res.status(403).json({
       error: 'Insufficient permissions',
-      message: `Your API key lacks the '${requiredScope}' scope required for '${resource}'`,
-      requiredScope
+      message: `Your API key lacks the '${requiredScope}' scope required for '${resource}'. Note: 'write_' scopes also grant 'read_' access.`,
+      requiredScope,
+      yourScopes: req.scopes
     });
   }
 

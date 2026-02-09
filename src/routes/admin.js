@@ -131,6 +131,7 @@ router.get('/admin', (req, res) => {
         .method-get { background: #b4e7ce; color: #0c5132; }
         .method-post { background: #ffd79d; color: #7f2d00; }
         .method-put { background: #b4dafe; color: #004085; }
+        .method-delete { background: #fbeae5; color: #de3618; }
         
         /* Utilities */
         .loading { text-align: center; padding: 60px 20px; color: #637381; }
@@ -519,9 +520,26 @@ router.get('/admin', (req, res) => {
             '<div class="endpoints">' +
               AVAILABLE_SCOPES.filter(function(s) { return storeData.scopes.includes(s.value); }).map(function(s) {
                 const resource = s.value.replace('read_', '').replace('write_', '');
+                const isWrite = s.value.startsWith('write_');
+                const isRead = s.value.startsWith('read_');
                 let queryParam = '';
                 if (resource === 'fulfillments') queryParam = '?order_id=...';
-                return '<div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/' + resource + queryParam + '</code> — ' + s.description + '</div>';
+                
+                let endpoints = '';
+                
+                // Always show GET for read or write scopes
+                if (isRead || isWrite) {
+                  endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-get"\u003eGET\u003c/span\u003e\u003ccode\u003e/' + resource + queryParam + '\u003c/code\u003e — ' + s.description + '\u003c/div\u003e';
+                }
+                
+                // Show POST, PUT, DELETE only for write scopes
+                if (isWrite) {
+                  endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-post"\u003ePOST\u003c/span\u003e\u003ccode\u003e/' + resource + '\u003c/code\u003e — Create new ' + resource.replace(/_/g, ' ') + '\u003c/div\u003e';
+                  endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-put"\u003ePUT\u003c/span\u003e\u003ccode\u003e/' + resource + '/:id\u003c/code\u003e — Update existing ' + resource.replace(/_/g, ' ') + '\u003c/div\u003e';
+                  endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-delete"\u003eDELETE\u003c/span\u003e\u003ccode\u003e/' + resource + '/:id\u003c/code\u003e — Delete ' + resource.replace(/_/g, ' ') + '\u003c/div\u003e';
+                }
+                
+                return endpoints;
               }).join('') +
               '<div class="endpoint"><span class="endpoint-method method-get">GET</span><code>/resources</code> — Discover all available endpoints</div>' +
             '</div>' +
