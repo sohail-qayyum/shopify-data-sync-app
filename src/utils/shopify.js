@@ -106,6 +106,31 @@ class ShopifyAPI {
     return this.request('GET', endpoint);
   }
 
+  /**
+   * Generic Resource Creator
+   */
+  async createResource(resource, data) {
+    const singular = resource.replace(/s$/, '');
+    const wrappedData = (data && data[singular]) ? data : { [singular]: data };
+    return this.request('POST', `/${resource}.json`, wrappedData);
+  }
+
+  /**
+   * Generic Resource Updater
+   */
+  async updateResource(resource, id, data) {
+    const singular = resource.replace(/s$/, '');
+    const wrappedData = (data && data[singular]) ? data : { [singular]: data };
+    return this.request('PUT', `/${resource}/${id}.json`, wrappedData);
+  }
+
+  /**
+   * Generic Resource Deleter
+   */
+  async deleteResource(resource, id) {
+    return this.request('DELETE', `/${resource}/${id}.json`);
+  }
+
   // Customers
   async getCustomers(params = {}) {
     const queryString = new URLSearchParams(params).toString();

@@ -25,15 +25,26 @@ router.get('/health', (req, res) => {
  */
 function requireScope(scope) {
   return (req, res, next) => {
-    if (!req.scopes || !req.scopes.includes(scope)) {
-      return res.status(403).json({
-        error: 'Insufficient permissions',
-        message: `This API key does not have the '${scope}' scope`,
-        yourScopes: req.scopes,
-        requiredScope: scope
-      });
+    // Basic check first
+    if (req.scopes && req.scopes.includes(scope)) {
+      return next();
     }
-    next();
+
+    // If we need a 'read_' scope, a 'write_' scope for the same resource is also sufficient
+    if (scope.startsWith('read_')) {
+      const writeScope = scope.replace('read_', 'write_');
+      if (req.scopes && req.scopes.includes(writeScope)) {
+        return next();
+      }
+    }
+
+    // If not found, return unauthorized
+    return res.status(403).json({
+      error: 'Insufficient permissions',
+      message: `Your API key lacks the '${scope}' scope required for this request.`,
+      yourScopes: req.scopes,
+      requiredScope: scope
+    });
   };
 }
 
@@ -521,6 +532,96 @@ router.get('/v1/:resource', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: `Failed to fetch ${resource}`,
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
+  }
+});
+
+/**
+ * POST /api/v1/:resource - Create resource
+ */
+router.post('/v1/:resource', async (req, res) => {
+  const { resource } = req.params;
+  const requiredScope = `write_${resource}`;
+
+  if (!req.scopes || !req.scopes.includes(requiredScope)) {
+    return res.status(403).json({
+      error: 'Insufficient permissions',
+      message: `Your API key lacks the '${requiredScope}' scope required to create '${resource}'`,
+      requiredScope
+    });
+  }
+
+  try {
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    const result = await shopify.createResource(resource, req.body);
+
+    await logOperation(req, 'CREATE', resource, result[Object.keys(result)[0]]?.id, 'success');
+    res.status(201).json({ success: true, resource, data: result });
+  } catch (error) {
+    res.status(500).json({
+      error: `Failed to create ${resource}`,
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
+  }
+});
+
+/**
+ * PUT /api/v1/:resource/:id - Update resource
+ */
+router.put('/v1/:resource/:id', async (req, res) => {
+  const { resource, id } = req.params;
+  const requiredScope = `write_${resource}`;
+
+  if (!req.scopes || !req.scopes.includes(requiredScope)) {
+    return res.status(403).json({
+      error: 'Insufficient permissions',
+      message: `Your API key lacks the '${requiredScope}' scope required to update '${resource}'`,
+      requiredScope
+    });
+  }
+
+  try {
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    const result = await shopify.updateResource(resource, id, req.body);
+
+    await logOperation(req, 'UPDATE', resource, id, 'success');
+    res.json({ success: true, resource, data: result });
+  } catch (error) {
+    res.status(500).json({
+      error: `Failed to update ${resource}`,
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
+  }
+});
+
+/**
+ * DELETE /api/v1/:resource/:id - Delete resource
+ */
+router.delete('/v1/:resource/:id', async (req, res) => {
+  const { resource, id } = req.params;
+  const requiredScope = `write_${resource}`;
+
+  if (!req.scopes || !req.scopes.includes(requiredScope)) {
+    return res.status(403).json({
+      error: 'Insufficient permissions',
+      message: `Your API key lacks the '${requiredScope}' scope required to delete '${resource}'`,
+      requiredScope
+    });
+  }
+
+  try {
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    await shopify.deleteResource(resource, id);
+
+    await logOperation(req, 'DELETE', resource, id, 'success');
+    res.json({ success: true, message: `${resource} ${id} deleted successfully` });
+  } catch (error) {
+    res.status(500).json({
+      error: `Failed to delete ${resource}`,
       message: error.message,
       shopifyError: error.shopifyMessage
     });

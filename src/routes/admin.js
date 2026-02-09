@@ -140,9 +140,14 @@ router.get('/admin', (req, res) => {
         .mt-2 { margin-top: 16px; }
         .mb-2 { margin-bottom: 16px; }
         
+        
         /* Support Section */
         .support-box { background: linear-gradient(135deg, #f4f6f8 0%, #e4e5e7 100%); padding: 20px; border-radius: 8px; border: 1px solid #c4cdd5; }
         .support-icon { font-size: 32px; margin-bottom: 12px; }
+        
+        /* Scope Display */
+        .scope-display { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+        .scope-badge { display: inline-block; padding: 4px 10px; background: #e3f1df; color: #108043; border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap; }
       </style>
     </head>
     <body>
@@ -500,7 +505,10 @@ router.get('/admin', (req, res) => {
             apiKeysHtml = '<div style="text-align: center; padding: 40px; color: #637381;"><div style="font-size: 48px; margin-bottom: 16px;">🔑</div><p>No API keys created yet.</p><p>Create your first API key to start syncing data with your custom portal.</p></div>';
           } else {
             apiKeysHtml = apiKeys.map(function(key) {
-              return '<div class="api-key-item"><h3><span>' + key.name + '</span> <span class="badge ' + (key.is_active ? 'badge-success' : 'badge-inactive') + '">' + (key.is_active ? 'Active' : 'Inactive') + '</span></h3><p><strong>Created:</strong> ' + new Date(key.created_at).toLocaleString() + '</p><p><strong>Last Used:</strong> ' + (key.last_used_at ? new Date(key.last_used_at).toLocaleString() : 'Never') + '</p><p><strong>Scopes:</strong> ' + key.scopes + '</p><button class="button button-danger button-small" onclick="deleteApiKey(' + key.id + ')">Delete Key</button></div>';
+              const scopeBadges = key.scopes.split(',').map(function(scope) {
+                return '\u003cspan class=\"scope-badge\"\u003e' + scope.trim() + '\u003c/span\u003e';
+              }).join('');
+              return '\u003cdiv class=\"api-key-item\"\u003e\u003ch3\u003e\u003cspan\u003e' + key.name + '\u003c/span\u003e \u003cspan class=\"badge ' + (key.is_active ? 'badge-success' : 'badge-inactive') + '\"\u003e' + (key.is_active ? 'Active' : 'Inactive') + '\u003c/span\u003e\u003c/h3\u003e\u003cp\u003e\u003cstrong\u003eCreated:\u003c/strong\u003e ' + new Date(key.created_at).toLocaleString() + '\u003c/p\u003e\u003cp\u003e\u003cstrong\u003eLast Used:\u003c/strong\u003e ' + (key.last_used_at ? new Date(key.last_used_at).toLocaleString() : 'Never') + '\u003c/p\u003e\u003cp\u003e\u003cstrong\u003eScopes:\u003c/strong\u003e\u003c/p\u003e\u003cdiv class=\"scope-display\"\u003e' + scopeBadges + '\u003c/div\u003e\u003cbutton class=\"button button-danger button-small\" style=\"margin-top: 12px;\" onclick=\"deleteApiKey(' + key.id + ')\"\u003eDelete Key\u003c/button\u003e\u003c/div\u003e';
             }).join('');
           }
           
