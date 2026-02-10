@@ -56,20 +56,27 @@ class ShopifyGraphQL {
   async getReturns(first = 50, after = null) {
     const query = `
       query getReturns($first: Int!, $after: String) {
-        shop {
-          returns(first: $first, after: $after) {
-            edges {
-              node {
-                id
-                name
-                status
-                updatedAt
-                order {
-                  id
-                  name
+        orders(first: $first, after: $after, query: "return_status:returned OR return_status:in_progress") {
+          edges {
+            node {
+              id
+              name
+              returns(first: 10) {
+                edges {
+                  node {
+                    id
+                    name
+                    status
+                    updatedAt
+                  }
                 }
               }
             }
+            cursor
+          }
+          pageInfo {
+            hasNextPage
+            hasPreviousPage
           }
         }
       }

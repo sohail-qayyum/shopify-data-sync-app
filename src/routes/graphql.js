@@ -43,7 +43,26 @@ router.get('/returns', requireGraphQLScope('read_returns'), async (req, res) => 
         const result = await graphql.getReturns(parseInt(first), after);
 
         await logOperation(req, 'READ', 'returns', null, 'success');
-        res.json({ success: true, data: result.shop?.returns || result.returns || { edges: [] } });
+
+        // Flatten returns from orders
+        let returns = [];
+        if (result.orders && result.orders.edges) {
+            result.orders.edges.forEach(orderEdge => {
+                if (orderEdge.node.returns && orderEdge.node.returns.edges) {
+                    orderEdge.node.returns.edges.forEach(returnEdge => {
+                        returns.push({
+                            ...returnEdge.node,
+                            order: {
+                                id: orderEdge.node.id,
+                                name: orderEdge.node.name
+                            }
+                        });
+                    });
+                }
+            });
+        }
+
+        res.json({ success: true, data: { edges: returns.map(r => ({ node: r })) } });
     } catch (error) {
         await logOperation(req, 'READ', 'returns', null, 'error');
         res.status(error.statusCode || 500).json({
