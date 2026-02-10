@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const ShopifyGraphQL = require('../utils/graphql');
-const { authenticateApiKey, logOperation } = require('../middleware/auth');
+const { verifyApiKey, logOperation } = require('../middleware/auth');
 
 // Apply authentication middleware to all GraphQL routes
-router.use(authenticateApiKey);
+router.use(verifyApiKey);
 
 /**
  * Helper function to check GraphQL-specific scopes

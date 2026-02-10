@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { verifyApiKey, apiLimiter } = require('../middleware/auth');
+const { verifyApiKey, apiLimiter, logOperation } = require('../middleware/auth');
 const { ShopifyAPI } = require('../utils/shopify');
 const syncLogService = require('../services/syncLogService');
 
@@ -46,25 +46,6 @@ function requireScope(scope) {
       requiredScope: scope
     });
   };
-}
-
-/**
- * Helper function to log sync operations
- */
-async function logOperation(req, action, resourceType, resourceId, status, details = null) {
-  try {
-    await syncLogService.logSync(
-      req.storeId,
-      req.apiKeyId,
-      action,
-      resourceType,
-      resourceId,
-      status,
-      details
-    );
-  } catch (error) {
-    console.error('Error logging sync:', error);
-  }
 }
 
 // ===== ORDERS =====
