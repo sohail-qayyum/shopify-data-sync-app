@@ -460,14 +460,40 @@ router.get('/admin', (req, res) => {
             storeData = data.store; if(typeof storeData.scopes === \"string\") storeData.scopes = storeData.scopes.split(\",\").map(function(s){return s.trim()});
             apiKeys = data.apiKeys || [];
             
+            
             // Dynamically generate AVAILABLE_SCOPES from the store's installed scopes
-            AVAILABLE_SCOPES = (Array.isArray(storeData.scopes) ? storeData.scopes : (storeData.scopes ? storeData.scopes.split(',').map(function(s) { return s.trim(); }) : [])).map(function(s) {
-              const label = s.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
-              let description = 'Access to ' + label;
-              if (s.startsWith('read_')) description = 'View ' + label.replace('Read ', '') + ' data';
-              if (s.startsWith('write_')) description = 'Manage ' + label.replace('Write ', '');
-              return { value: s, label: label, description: description };
-            });
+            // Whitelist of scopes that have working REST API endpoints
+            const REST_API_SCOPES = [
+              'read_orders', 'write_orders',
+              'read_products', 'write_products',
+              'read_customers', 'write_customers',
+              'read_inventory', 'write_inventory',
+              'read_locations', 'write_locations',
+              'read_price_rules', 'write_price_rules',
+              'read_draft_orders', 'write_draft_orders',
+              'read_fulfillments', 'write_fulfillments',
+              'read_gift_cards', 'write_gift_cards',
+              'read_marketing_events', 'write_marketing_events',
+              'read_content', 'write_content',
+              'read_themes', 'write_themes',
+              'read_script_tags', 'write_script_tags',
+              'read_shipping', 'write_shipping',
+              'read_analytics', 'read_reports',
+              'read_all_orders', 'read_checkouts', 'write_checkouts',
+              'read_returns', 'write_returns',
+              'read_shopify_payments_payouts', 'read_shopify_payments_disputes',
+              'read_order_edits', 'write_order_edits'
+            ];
+            
+            AVAILABLE_SCOPES = (Array.isArray(storeData.scopes) ? storeData.scopes : (storeData.scopes ? storeData.scopes.split(',').map(function(s) { return s.trim(); }) : []))
+              .filter(function(s) { return REST_API_SCOPES.includes(s); })
+              .map(function(s) {
+                const label = s.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
+                let description = 'Access to ' + label;
+                if (s.startsWith('read_')) description = 'View ' + label.replace('Read ', '') + ' data';
+                if (s.startsWith('write_')) description = 'Manage ' + label.replace('Write ', '');
+                return { value: s, label: label, description: description };
+              });
 
             render();
           } catch (error) {
@@ -522,6 +548,11 @@ router.get('/admin', (req, res) => {
                 const resource = s.value.replace('read_', '').replace('write_', '');
                 const isWrite = s.value.startsWith('write_');
                 const isRead = s.value.startsWith('read_');
+                
+                // GraphQL specific resources
+                const isGraphQLOnly = ['returns', 'shopify_payments_payouts', 'shopify_payments_disputes', 'order_edits'].includes(resource);
+                const baseUrl = isGraphQLOnly ? '/graphql' : '';
+                
                 let queryParam = '';
                 if (resource === 'fulfillments') queryParam = '?order_id=...';
                 
@@ -529,14 +560,30 @@ router.get('/admin', (req, res) => {
                 
                 // Always show GET for read or write scopes
                 if (isRead || isWrite) {
-                  endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-get"\u003eGET\u003c/span\u003e\u003ccode\u003e/' + resource + queryParam + '\u003c/code\u003e — ' + s.description + '\u003c/div\u003e';
+                  const path = isGraphQLOnly ? baseUrl + '/' + resource.replace('shopify_payments_', '') : '/' + resource + queryParam;
+                  endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-get"\u003eGET\u003c/span\u003e\u003ccode\u003e' + path + '\u003c/code\u003e — ' + s.description + (isGraphQLOnly ? ' (GraphQL)' : '') + '\u003c/div\u003e';
+                  
+                  // Add sub-resources for orders
+                  if (resource === 'orders') {
+                    endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-get"\u003eGET\u003c/span\u003e\u003ccode\u003e/orders/:id/refunds\u003c/code\u003e — View order refunds\u003c/div\u003e';
+                    endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-get"\u003eGET\u003c/span\u003e\u003ccode\u003e/orders/:id/transactions\u003c/code\u003e — View order transactions\u003c/div\u003e';
+                    endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-get"\u003eGET\u003c/span\u003e\u003ccode\u003e/graphql/transactions/:id\u003c/code\u003e — Deep transaction details (GraphQL)\u003c/div\u003e';
+                  }
+                  
+                  if (resource === 'order_edits') {
+                    endpoints = '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-get"\u003eGET\u003c/span\u003e\u003ccode\u003e/graphql/order-edits/:order_id\u003c/code\u003e — View order edits (GraphQL)\u003c/div\u003e';
+                  }
                 }
                 
-                // Show POST, PUT, DELETE only for write scopes
-                if (isWrite) {
+                // Show POST, PUT, DELETE only for write scopes (and not for GraphQL only resources yet)
+                if (isWrite && !isGraphQLOnly) {
                   endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-post"\u003ePOST\u003c/span\u003e\u003ccode\u003e/' + resource + '\u003c/code\u003e — Create new ' + resource.replace(/_/g, ' ') + '\u003c/div\u003e';
                   endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-put"\u003ePUT\u003c/span\u003e\u003ccode\u003e/' + resource + '/:id\u003c/code\u003e — Update existing ' + resource.replace(/_/g, ' ') + '\u003c/div\u003e';
                   endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-delete"\u003eDELETE\u003c/span\u003e\u003ccode\u003e/' + resource + '/:id\u003c/code\u003e — Delete ' + resource.replace(/_/g, ' ') + '\u003c/div\u003e';
+                  
+                  if (resource === 'orders') {
+                    endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-post"\u003ePOST\u003c/span\u003e\u003ccode\u003e/orders/:id/refunds\u003c/code\u003e — Create order refund\u003c/div\u003e';
+                  }
                 }
                 
                 return endpoints;

@@ -439,18 +439,61 @@ router.get('/stats', async (req, res) => {
  * GET /api/v1/resources - List available resources based on scopes
  */
 router.get('/v1/resources', (req, res) => {
-  const available = (req.scopes || [])
-    .filter(s => s.startsWith('read_'))
-    .map(s => {
-      const resource = s.replace('read_', '');
-      return {
-        resource: resource,
-        endpoint: `/api/v1/${resource}`,
-        scope: s
-      };
-    });
+  const REST_API_RESOURCES = [
+    'orders', 'products', 'customers', 'inventory', 'locations',
+    'price_rules', 'draft_orders', 'fulfillments', 'gift_cards',
+    'marketing_events', 'content', 'themes', 'script_tags',
+    'shipping', 'analytics', 'reports', 'checkouts'
+  ];
 
-  res.json({ success: true, resources: available });
+  const GRAPHQL_RESOURCES = [
+    { name: 'returns', scope: 'read_returns', endpoint: '/api/v1/graphql/returns' },
+    { name: 'discounts', scope: 'read_discounts', endpoint: '/api/v1/graphql/discounts' },
+    { name: 'order_edits', scope: 'read_order_edits', endpoint: '/api/v1/graphql/order-edits' },
+    { name: 'payouts', scope: 'read_shopify_payments_payouts', endpoint: '/api/v1/graphql/payouts' },
+    { name: 'disputes', scope: 'read_shopify_payments_disputes', endpoint: '/api/v1/graphql/disputes' }
+  ];
+
+  const available = [];
+
+  // Add REST resources
+  REST_API_RESOURCES.forEach(resource => {
+    const readScope = `read_${resource}`;
+    const writeScope = `write_${resource}`;
+
+    if (req.scopes && (req.scopes.includes(readScope) || req.scopes.includes(writeScope))) {
+      available.push({
+        resource: resource,
+        type: 'REST',
+        endpoint: `/api/v1/${resource}`,
+        scopes: [readScope, writeScope].filter(s => req.scopes.includes(s))
+      });
+
+      // Add sub-resources for orders
+      if (resource === 'orders') {
+        available.push({ resource: 'refunds', type: 'REST', endpoint: '/api/v1/orders/:id/refunds', parent: 'orders' });
+        available.push({ resource: 'transactions', type: 'REST', endpoint: '/api/v1/orders/:id/transactions', parent: 'orders' });
+        available.push({ resource: 'transactions_details', type: 'GraphQL', endpoint: '/api/v1/graphql/transactions/:id', parent: 'orders' });
+      }
+    }
+  });
+
+  // Add GraphQL resources
+  GRAPHQL_RESOURCES.forEach(g => {
+    const readScope = g.scope;
+    const writeScope = g.scope.replace('read_', 'write_');
+
+    if (req.scopes && (req.scopes.includes(readScope) || req.scopes.includes(writeScope))) {
+      available.push({
+        resource: g.name,
+        type: 'GraphQL',
+        endpoint: g.endpoint,
+        scopes: [readScope, writeScope].filter(s => req.scopes.includes(s))
+      });
+    }
+  });
+
+  res.json({ success: true, total: available.length, resources: available });
 });
 
 /**
@@ -630,6 +673,112 @@ router.delete('/v1/:resource/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       error: `Failed to delete ${resource}`,
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
+  }
+});
+
+// ===== REFUNDS (REST API) =====
+
+/**
+ * GET /api/v1/orders/:orderId/refunds - Get refunds for an order
+ */
+router.get('/v1/orders/:orderId/refunds', async (req, res) => {
+  const { orderId } = req.params;
+  const requiredScope = 'read_orders';
+  const writeScope = 'write_orders';
+
+  const hasPermission = req.scopes && (
+    req.scopes.includes(requiredScope) ||
+    req.scopes.includes(writeScope)
+  );
+
+  if (!hasPermission) {
+    return res.status(403).json({
+      error: 'Insufficient permissions',
+      message: `Your API key lacks the '${requiredScope}' scope required for refunds.`,
+      requiredScope,
+      yourScopes: req.scopes
+    });
+  }
+
+  try {
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    const result = await shopify.request('GET', `/orders/${orderId}/refunds.json`);
+
+    await logOperation(req, 'READ', 'refunds', orderId, 'success');
+    res.json({ success: true, orderId, data: result });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to fetch refunds',
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
+  }
+});
+
+/**
+ * POST /api/v1/orders/:orderId/refunds - Create a refund
+ */
+router.post('/v1/orders/:orderId/refunds', async (req, res) => {
+  const { orderId } = req.params;
+  const requiredScope = 'write_orders';
+
+  if (!req.scopes || !req.scopes.includes(requiredScope)) {
+    return res.status(403).json({
+      error: 'Insufficient permissions',
+      message: `Your API key lacks the '${requiredScope}' scope required to create refunds.`,
+      requiredScope
+    });
+  }
+
+  try {
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    const result = await shopify.request('POST', `/orders/${orderId}/refunds.json`, req.body);
+
+    await logOperation(req, 'CREATE', 'refunds', orderId, 'success');
+    res.status(201).json({ success: true, orderId, data: result });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to create refund',
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
+  }
+});
+
+/**
+ * GET /api/v1/orders/:orderId/transactions - Get transactions for an order (REST)
+ */
+router.get('/v1/orders/:orderId/transactions', async (req, res) => {
+  const { orderId } = req.params;
+  const requiredScope = 'read_orders';
+  const writeScope = 'write_orders';
+
+  const hasPermission = req.scopes && (
+    req.scopes.includes(requiredScope) ||
+    req.scopes.includes(writeScope)
+  );
+
+  if (!hasPermission) {
+    return res.status(403).json({
+      error: 'Insufficient permissions',
+      message: `Your API key lacks the '${requiredScope}' scope required for transactions.`,
+      requiredScope,
+      yourScopes: req.scopes
+    });
+  }
+
+  try {
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    const result = await shopify.request('GET', `/orders/${orderId}/transactions.json`);
+
+    await logOperation(req, 'READ', 'transactions', orderId, 'success');
+    res.json({ success: true, orderId, data: result });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to fetch transactions',
       message: error.message,
       shopifyError: error.shopifyMessage
     });

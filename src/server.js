@@ -9,6 +9,7 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const apiRoutes = require('./routes/api');
 const webhookRoutes = require('./routes/webhooks');
+const graphqlRoutes = require('./routes/graphql');
 
 const app = express();
 
@@ -86,6 +87,7 @@ app.get('/', (req, res) => {
 app.use('/', authRoutes);           // OAuth and installation
 app.use('/', adminRoutes);          // Admin UI and management
 app.use('/api', apiRoutes);         // External API for portal
+app.use('/api/v1/graphql', graphqlRoutes); // GraphQL endpoints
 app.use('/webhooks', webhookRoutes); // Shopify webhooks
 
 // Error handling middleware
