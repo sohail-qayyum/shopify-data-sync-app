@@ -550,10 +550,22 @@ router.get('/v1/:resource', async (req, res) => {
         }
         result = await shopify.getFulfillments(req.query.order_id);
         break;
-      case 'returns': result = await shopify.getReturns(req.query); break;
+      case 'analytics':
+      case 'reports':
+        result = await shopify.getResource('reports', req.query);
+        break;
+      case 'shipping':
+        result = await shopify.getResource('shipping_zones', req.query);
+        break;
       case 'price_rules': result = await shopify.getPriceRules(req.query); break;
       case 'discounts': result = await shopify.getDiscounts(req.query); break;
       case 'draft_orders': result = await shopify.getDraftOrders(req.query); break;
+      case 'returns':
+        // Redirect to GraphQL returns if possible, or provide a helpful error
+        return res.status(400).json({
+          error: 'REST API not supported for returns',
+          message: 'Please use the GraphQL endpoint: /api/v1/graphql/returns'
+        });
       default:
         // Future-proof fallback for other resources
         result = await shopify.getResource(resource, req.query);

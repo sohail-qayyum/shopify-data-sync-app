@@ -5,55 +5,55 @@ const axios = require('axios');
  * Handles GraphQL queries for resources not available in REST API
  */
 class ShopifyGraphQL {
-    constructor(shopDomain, accessToken) {
-        this.shopDomain = shopDomain;
-        this.accessToken = accessToken;
-        this.apiVersion = '2024-01';
-        this.baseUrl = `https://${shopDomain}/admin/api/${this.apiVersion}/graphql.json`;
-    }
+  constructor(shopDomain, accessToken) {
+    this.shopDomain = shopDomain;
+    this.accessToken = accessToken;
+    this.apiVersion = '2024-01';
+    this.baseUrl = `https://${shopDomain}/admin/api/${this.apiVersion}/graphql.json`;
+  }
 
-    /**
-     * Execute a GraphQL query
-     */
-    async query(graphqlQuery, variables = {}) {
-        try {
-            const response = await axios.post(
-                this.baseUrl,
-                {
-                    query: graphqlQuery,
-                    variables: variables
-                },
-                {
-                    headers: {
-                        'X-Shopify-Access-Token': this.accessToken,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            if (response.data.errors) {
-                const error = new Error('GraphQL query failed');
-                error.graphqlErrors = response.data.errors;
-                throw error;
-            }
-
-            return response.data.data;
-        } catch (error) {
-            if (error.response) {
-                const shopifyError = new Error(error.response.data?.errors?.[0]?.message || 'GraphQL request failed');
-                shopifyError.statusCode = error.response.status;
-                shopifyError.graphqlErrors = error.response.data?.errors;
-                throw shopifyError;
-            }
-            throw error;
+  /**
+   * Execute a GraphQL query
+   */
+  async query(graphqlQuery, variables = {}) {
+    try {
+      const response = await axios.post(
+        this.baseUrl,
+        {
+          query: graphqlQuery,
+          variables: variables
+        },
+        {
+          headers: {
+            'X-Shopify-Access-Token': this.accessToken,
+            'Content-Type': 'application/json'
+          }
         }
-    }
+      );
 
-    /**
-     * Get returns with pagination
-     */
-    async getReturns(first = 50, after = null) {
-        const query = `
+      if (response.data.errors) {
+        const error = new Error('GraphQL query failed');
+        error.graphqlErrors = response.data.errors;
+        throw error;
+      }
+
+      return response.data.data;
+    } catch (error) {
+      if (error.response) {
+        const shopifyError = new Error(error.response.data?.errors?.[0]?.message || 'GraphQL request failed');
+        shopifyError.statusCode = error.response.status;
+        shopifyError.graphqlErrors = error.response.data?.errors;
+        throw shopifyError;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get returns with pagination
+   */
+  async getReturns(first = 50, after = null) {
+    const query = `
       query getReturns($first: Int!, $after: String) {
         returns(first: $first, after: $after) {
           edges {
@@ -61,42 +61,25 @@ class ShopifyGraphQL {
               id
               name
               status
-              totalQuantity
+              updatedAt
               order {
                 id
                 name
               }
-              returnLineItems(first: 50) {
-                edges {
-                  node {
-                    id
-                    quantity
-                    returnReason
-                    returnReasonNote
-                    refundableQuantity
-                    refundedQuantity
-                  }
-                }
-              }
             }
-            cursor
-          }
-          pageInfo {
-            hasNextPage
-            hasPreviousPage
           }
         }
       }
     `;
 
-        return this.query(query, { first, after });
-    }
+    return this.query(query, { first, after });
+  }
 
-    /**
-     * Get a specific return by ID
-     */
-    async getReturn(returnId) {
-        const query = `
+  /**
+   * Get a specific return by ID
+   */
+  async getReturn(returnId) {
+    const query = `
       query getReturn($id: ID!) {
         return(id: $id) {
           id
@@ -129,14 +112,14 @@ class ShopifyGraphQL {
       }
     `;
 
-        return this.query(query, { id: returnId });
-    }
+    return this.query(query, { id: returnId });
+  }
 
-    /**
-     * Get discounts (modern discount API)
-     */
-    async getDiscounts(first = 50, after = null) {
-        const query = `
+  /**
+   * Get discounts (modern discount API)
+   */
+  async getDiscounts(first = 50, after = null) {
+    const query = `
       query getDiscounts($first: Int!, $after: String) {
         discountNodes(first: $first, after: $after) {
           edges {
@@ -199,36 +182,24 @@ class ShopifyGraphQL {
       }
     `;
 
-        return this.query(query, { first, after });
-    }
+    return this.query(query, { first, after });
+  }
 
-    /**
-     * Get order edits
-     */
-    async getOrderEdits(orderId) {
-        const query = `
+  /**
+   * Get order edits
+   */
+  async getOrderEdits(orderId) {
+    const query = `
       query getOrderEdits($orderId: ID!) {
         order(id: $orderId) {
           id
           name
-          edits(first: 50) {
+          lineItems(first: 50) {
             edges {
               node {
                 id
-                createdAt
-                staffMember {
-                  id
-                  name
-                }
-                lineItems(first: 50) {
-                  edges {
-                    node {
-                      id
-                      quantity
-                      deltaQuantity
-                    }
-                  }
-                }
+                title
+                quantity
               }
             }
           }
@@ -236,14 +207,14 @@ class ShopifyGraphQL {
       }
     `;
 
-        return this.query(query, { orderId });
-    }
+    return this.query(query, { orderId });
+  }
 
-    /**
-     * Get Shopify Payments payouts
-     */
-    async getPayouts(first = 50, after = null) {
-        const query = `
+  /**
+   * Get Shopify Payments payouts
+   */
+  async getPayouts(first = 50, after = null) {
+    const query = `
       query getPayouts($first: Int!, $after: String) {
         shopifyPaymentsAccount {
           payouts(first: $first, after: $after) {
@@ -257,10 +228,6 @@ class ShopifyGraphQL {
                   currencyCode
                 }
                 gross {
-                  amount
-                  currencyCode
-                }
-                fee {
                   amount
                   currencyCode
                 }
@@ -289,14 +256,14 @@ class ShopifyGraphQL {
       }
     `;
 
-        return this.query(query, { first, after });
-    }
+    return this.query(query, { first, after });
+  }
 
-    /**
-     * Get payment disputes
-     */
-    async getDisputes(first = 50, after = null) {
-        const query = `
+  /**
+   * Get payment disputes
+   */
+  async getDisputes(first = 50, after = null) {
+    const query = `
       query getDisputes($first: Int!, $after: String) {
         shopifyPaymentsAccount {
           disputes(first: $first, after: $after) {
@@ -309,7 +276,9 @@ class ShopifyGraphQL {
                   amount
                   currencyCode
                 }
-                reasonDetails
+                reasonDetails {
+                   reason
+                }
                 order {
                   id
                   name
@@ -325,14 +294,14 @@ class ShopifyGraphQL {
       }
     `;
 
-        return this.query(query, { first, after });
-    }
+    return this.query(query, { first, after });
+  }
 
-    /**
-     * Get detailed transaction information for an order
-     */
-    async getOrderTransactions(orderId) {
-        const query = `
+  /**
+   * Get detailed transaction information for an order
+   */
+  async getOrderTransactions(orderId) {
+    const query = `
       query getOrderTransactions($orderId: ID!) {
         order(id: $orderId) {
           id
@@ -341,32 +310,26 @@ class ShopifyGraphQL {
             id
             kind
             status
-            amount {
-              amount
-              currencyCode
+            amountSet {
+              shopMoney {
+                amount
+                currencyCode
+              }
             }
             gateway
             processedAt
             paymentDetails {
               ... on CardPaymentDetails {
-                creditCardNumber
-                creditCardCompany
+                paymentMethodName
               }
-            }
-            fees {
-              amount {
-                amount
-                currencyCode
-              }
-              type
             }
           }
         }
       }
     `;
 
-        return this.query(query, { orderId });
-    }
+    return this.query(query, { orderId });
+  }
 }
 
 module.exports = ShopifyGraphQL;
