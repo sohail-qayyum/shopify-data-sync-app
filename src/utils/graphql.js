@@ -1,4 +1,5 @@
 const axios = require('axios');
+const config = require('../config');
 
 /**
  * GraphQL utility for Shopify Admin API
@@ -8,7 +9,7 @@ class ShopifyGraphQL {
   constructor(shopDomain, accessToken) {
     this.shopDomain = shopDomain;
     this.accessToken = accessToken;
-    this.apiVersion = '2024-01';
+    this.apiVersion = config.shopify.apiVersion;
     this.baseUrl = `https://${shopDomain}/admin/api/${this.apiVersion}/graphql.json`;
   }
 

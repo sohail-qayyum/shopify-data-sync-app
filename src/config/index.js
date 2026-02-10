@@ -5,7 +5,7 @@ module.exports = {
     apiKey: process.env.SHOPIFY_API_KEY,
     apiSecret: process.env.SHOPIFY_API_SECRET,
     scopes: process.env.SHOPIFY_SCOPES || 'read_orders,write_orders,read_customers,write_customers,read_products,write_products,read_inventory,write_inventory,read_fulfillments,write_fulfillments,read_locations,read_product_listings',
-    apiVersion: '2025-10'
+    apiVersion: '2025-01'
   },
 
   app: {
