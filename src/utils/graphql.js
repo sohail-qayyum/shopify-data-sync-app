@@ -56,16 +56,18 @@ class ShopifyGraphQL {
   async getReturns(first = 50, after = null) {
     const query = `
       query getReturns($first: Int!, $after: String) {
-        returns(first: $first, after: $after) {
-          edges {
-            node {
-              id
-              name
-              status
-              updatedAt
-              order {
+        shop {
+          returns(first: $first, after: $after) {
+            edges {
+              node {
                 id
                 name
+                status
+                updatedAt
+                order {
+                  id
+                  name
+                }
               }
             }
           }

@@ -574,7 +574,18 @@ router.get('/v1/:resource', async (req, res) => {
 
     res.json({ success: true, resource, data: result });
   } catch (error) {
-    res.status(500).json({
+    console.error(`❌ Error fetching ${resource}:`, error.message);
+
+    // Check if it's a 404 for reports/analytics - likely a plan issue
+    if (error.response?.status === 404 && (resource === 'reports' || resource === 'analytics')) {
+      return res.status(404).json({
+        error: `Failed to fetch ${resource}`,
+        message: 'The Reports API returned a 404. This usually means your Shopify plan (Basic) does not support the native Reports API.',
+        suggestion: 'Try fetching raw data (orders, customers) instead.'
+      });
+    }
+
+    res.status(error.response?.status || 500).json({
       error: `Failed to fetch ${resource}`,
       message: error.message,
       shopifyError: error.shopifyMessage

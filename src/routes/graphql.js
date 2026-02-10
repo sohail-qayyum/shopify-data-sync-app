@@ -43,7 +43,7 @@ router.get('/returns', requireGraphQLScope('read_returns'), async (req, res) => 
         const result = await graphql.getReturns(parseInt(first), after);
 
         await logOperation(req, 'READ', 'returns', null, 'success');
-        res.json({ success: true, data: result.returns });
+        res.json({ success: true, data: result.shop?.returns || result.returns || { edges: [] } });
     } catch (error) {
         await logOperation(req, 'READ', 'returns', null, 'error');
         res.status(error.statusCode || 500).json({
@@ -139,8 +139,12 @@ router.get('/payouts', requireGraphQLScope('read_shopify_payments_payouts'), asy
         const result = await graphql.getPayouts(parseInt(first), after);
 
         await logOperation(req, 'READ', 'payouts', null, 'success');
-        res.json({ success: true, data: result.shopifyPaymentsAccount?.payouts });
+        res.json({
+            success: true,
+            data: result.shopifyPaymentsAccount?.payouts || { edges: [] }
+        });
     } catch (error) {
+        console.error('❌ Payouts Error:', error);
         await logOperation(req, 'READ', 'payouts', null, 'error');
         res.status(error.statusCode || 500).json({
             error: 'Failed to fetch payouts',
@@ -162,8 +166,12 @@ router.get('/disputes', requireGraphQLScope('read_shopify_payments_disputes'), a
         const result = await graphql.getDisputes(parseInt(first), after);
 
         await logOperation(req, 'READ', 'disputes', null, 'success');
-        res.json({ success: true, data: result.shopifyPaymentsAccount?.disputes });
+        res.json({
+            success: true,
+            data: result.shopifyPaymentsAccount?.disputes || { edges: [] }
+        });
     } catch (error) {
+        console.error('❌ Disputes Error:', error);
         await logOperation(req, 'READ', 'disputes', null, 'error');
         res.status(error.statusCode || 500).json({
             error: 'Failed to fetch disputes',
