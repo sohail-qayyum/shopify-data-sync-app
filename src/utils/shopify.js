@@ -98,18 +98,13 @@ class ShopifyAPI {
   }
 
   /**
-   * Generic Resource Fetcher (for future-proofing)
-   */
-  async getResource(resource, params = {}) {
-    const queryString = new URLSearchParams(params).toString();
-    const endpoint = queryString ? `/${resource}.json?${queryString}` : `/${resource}.json`;
-    return this.request('GET', endpoint);
-  }
-
-  /**
    * Generic Resource Creator
    */
   async createResource(resource, data) {
+    if (resource === 'inventory') {
+      const { inventory_item_id, location_id, available } = data;
+      return this.updateInventoryLevel(inventory_item_id, location_id, available);
+    }
     const singular = resource.replace(/s$/, '');
     const wrappedData = (data && data[singular]) ? data : { [singular]: data };
     return this.request('POST', `/${resource}.json`, wrappedData);
@@ -119,6 +114,12 @@ class ShopifyAPI {
    * Generic Resource Updater
    */
   async updateResource(resource, id, data) {
+    if (resource === 'inventory') {
+      const { location_id, available } = data;
+      // Use the id from URL as inventory_item_id if not in body
+      const itemId = data.inventory_item_id || id;
+      return this.updateInventoryLevel(itemId, location_id, available);
+    }
     const singular = resource.replace(/s$/, '');
     const wrappedData = (data && data[singular]) ? data : { [singular]: data };
     return this.request('PUT', `/${resource}/${id}.json`, wrappedData);
@@ -165,6 +166,47 @@ class ShopifyAPI {
     return this.request('POST', `/products.json`, { product: productData });
   }
 
+  /**
+   * Make GraphQL API request to Shopify
+   */
+  async graphql(query, variables = {}) {
+    try {
+      const url = `https://${this.shop}/admin/api/${this.apiVersion}/graphql.json`;
+      const headers = {
+        'X-Shopify-Access-Token': this.accessToken,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'ShopifyDataSyncApp/1.0.0 (Node.js)'
+      };
+
+      console.log('🟣 Shopify GraphQL Request:');
+      console.log('  URL:', url);
+
+      const response = await axios({
+        method: 'POST',
+        url,
+        headers,
+        data: { query, variables }
+      });
+
+      if (response.data.errors) {
+        console.error('❌ Shopify GraphQL Errors:', JSON.stringify(response.data.errors, null, 2));
+        const error = new Error('GraphQL Request Failed');
+        error.graphqlErrors = response.data.errors;
+        error.shopifyMessage = JSON.stringify(response.data.errors);
+        throw error;
+      }
+
+      console.log('✅ Shopify GraphQL Success');
+      return response.data.data;
+    } catch (error) {
+      if (error.graphqlErrors) throw error;
+
+      console.error('❌ Shopify GraphQL Network Error:', error.message);
+      throw error;
+    }
+  }
+
   // Inventory
   async getInventoryLevels(params = {}) {
     const queryString = new URLSearchParams(params).toString();
@@ -173,11 +215,76 @@ class ShopifyAPI {
   }
 
   async updateInventoryLevel(inventoryItemId, locationId, available) {
-    return this.request('POST', `/inventory_levels/set.json`, {
-      inventory_item_id: inventoryItemId,
-      location_id: locationId,
-      available: available
-    });
+    // Inventory level writes are deprecated in REST API 2024-01+
+    // Using GraphQL inventorySetOnHandQuantities mutation instead
+
+    // Format IDs as GIDs if they are numeric
+    const itemGid = inventoryItemId.toString().startsWith('gid://')
+      ? inventoryItemId
+      : `gid://shopify/InventoryItem/${inventoryItemId}`;
+
+    const locationGid = locationId.toString().startsWith('gid://')
+      ? locationId
+      : `gid://shopify/Location/${locationId}`;
+
+    const mutation = `
+      mutation inventorySetOnHandQuantities($input: InventorySetOnHandQuantitiesInput!) {
+        inventorySetOnHandQuantities(input: $input) {
+          inventoryLevels {
+            id
+            quantities(names: ["on_hand"]) {
+              name
+              quantity
+            }
+            item {
+              id
+            }
+            location {
+              id
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const variables = {
+      input: {
+        reason: "correction",
+        setQuantities: [
+          {
+            inventoryItemId: itemGid,
+            locationId: locationGid,
+            quantity: parseInt(available)
+          }
+        ]
+      }
+    };
+
+    const result = await this.graphql(mutation, variables);
+
+    // Check for user errors in the GraphQL response
+    if (result.inventorySetOnHandQuantities.userErrors && result.inventorySetOnHandQuantities.userErrors.length > 0) {
+      const error = new Error('Inventory Update User Error');
+      error.shopifyMessage = JSON.stringify(result.inventorySetOnHandQuantities.userErrors);
+      throw error;
+    }
+
+    // Transform back to a structure similar to REST for backward compatibility
+    const level = result.inventorySetOnHandQuantities.inventoryLevels[0];
+    const quantity = level.quantities.find(q => q.name === 'on_hand')?.quantity || 0;
+
+    return {
+      inventory_level: {
+        inventory_item_id: level.item.id.split('/').pop(),
+        location_id: level.location.id.split('/').pop(),
+        available: quantity,
+        updated_at: new Date().toISOString()
+      }
+    };
   }
 
   // Locations
