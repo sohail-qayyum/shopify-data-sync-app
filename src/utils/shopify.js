@@ -102,8 +102,11 @@ class ShopifyAPI {
    */
   async createResource(resource, data) {
     if (resource === 'inventory') {
-      const { inventory_item_id, location_id, available } = data;
-      return this.updateInventoryLevel(inventory_item_id, location_id, available);
+      const itemId = data.inventory_item_id || data.id;
+      const locationId = data.location_id;
+      const available = data.available !== undefined ? data.available : data.inventory_level?.available;
+
+      return this.updateInventoryLevel(itemId, locationId, available);
     }
     const singular = resource.replace(/s$/, '');
     const wrappedData = (data && data[singular]) ? data : { [singular]: data };
@@ -115,10 +118,12 @@ class ShopifyAPI {
    */
   async updateResource(resource, id, data) {
     if (resource === 'inventory') {
-      const { location_id, available } = data;
-      // Use the id from URL as inventory_item_id if not in body
+      // For inventory, the id in the URL is usually the inventory_item_id
       const itemId = data.inventory_item_id || id;
-      return this.updateInventoryLevel(itemId, location_id, available);
+      const locationId = data.location_id;
+      const available = data.available !== undefined ? data.available : data.inventory_level?.available;
+
+      return this.updateInventoryLevel(itemId, locationId, available);
     }
     const singular = resource.replace(/s$/, '');
     const wrappedData = (data && data[singular]) ? data : { [singular]: data };
@@ -217,6 +222,10 @@ class ShopifyAPI {
   async updateInventoryLevel(inventoryItemId, locationId, available) {
     // Inventory level writes are deprecated in REST API 2024-01+
     // Using GraphQL inventorySetOnHandQuantities mutation instead
+
+    if (!inventoryItemId || !locationId) {
+      throw new Error('Missing required parameters: inventory_item_id and location_id are both required for inventory updates.');
+    }
 
     // Format IDs as GIDs if they are numeric
     const itemGid = inventoryItemId.toString().startsWith('gid://')
