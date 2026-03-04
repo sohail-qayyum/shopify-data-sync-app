@@ -102,9 +102,21 @@ class ShopifyAPI {
    */
   async createResource(resource, data) {
     if (resource === 'inventory') {
-      const itemId = data.inventory_item_id || data.id;
-      const locationId = data.location_id;
+      let itemId = data.inventory_item_id || data.id;
+      let locationId = data.location_id;
       const available = data.available !== undefined ? data.available : data.inventory_level?.available;
+
+      // If location_id is missing, auto-fetch and use primary location
+      if (!locationId) {
+        console.log('  Notice: location_id missing for inventory create, fetching primary location...');
+        const locations = await this.getLocations();
+        if (locations && locations.locations && locations.locations.length > 0) {
+          locationId = locations.locations[0].id;
+          console.log('  Auto-selected primary location:', locationId);
+        } else {
+          throw new Error('No locations found. Shopify store must have at least one location for inventory updates.');
+        }
+      }
 
       return this.updateInventoryLevel(itemId, locationId, available);
     }
@@ -119,9 +131,21 @@ class ShopifyAPI {
   async updateResource(resource, id, data) {
     if (resource === 'inventory') {
       // For inventory, the id in the URL is usually the inventory_item_id
-      const itemId = data.inventory_item_id || id;
-      const locationId = data.location_id;
+      let itemId = data.inventory_item_id || id;
+      let locationId = data.location_id;
       const available = data.available !== undefined ? data.available : data.inventory_level?.available;
+
+      // If location_id is missing, auto-fetch and use primary location
+      if (!locationId) {
+        console.log('  Notice: location_id missing for inventory update, fetching primary location...');
+        const locations = await this.getLocations();
+        if (locations && locations.locations && locations.locations.length > 0) {
+          locationId = locations.locations[0].id;
+          console.log('  Auto-selected primary location:', locationId);
+        } else {
+          throw new Error('No locations found. Shopify store must have at least one location for inventory updates.');
+        }
+      }
 
       return this.updateInventoryLevel(itemId, locationId, available);
     }

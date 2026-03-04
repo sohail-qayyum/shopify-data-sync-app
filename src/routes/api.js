@@ -624,6 +624,36 @@ router.post('/v1/:resource', async (req, res) => {
 });
 
 /**
+ * PUT /api/v1/:resource - Update resource without ID in URL
+ */
+router.put('/v1/:resource', async (req, res) => {
+  const { resource } = req.params;
+  const requiredScope = `write_${resource}`;
+
+  if (!req.scopes || !req.scopes.includes(requiredScope)) {
+    return res.status(403).json({
+      error: 'Insufficient permissions',
+      message: `Your API key lacks the '${requiredScope}' scope required to update '${resource}'`,
+      requiredScope
+    });
+  }
+
+  try {
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    const result = await shopify.updateResource(resource, null, req.body);
+
+    await logOperation(req, 'UPDATE', resource, null, 'success');
+    res.json({ success: true, resource, data: result });
+  } catch (error) {
+    res.status(500).json({
+      error: `Failed to update ${resource}`,
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
+  }
+});
+
+/**
  * PUT /api/v1/:resource/:id - Update resource
  */
 router.put('/v1/:resource/:id', async (req, res) => {
