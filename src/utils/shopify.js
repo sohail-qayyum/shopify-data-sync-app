@@ -305,7 +305,9 @@ class ShopifyAPI {
     // Transform back to a structure similar to REST for backward compatibility
     const changes = result.inventorySetOnHandQuantities.inventoryAdjustmentGroup?.changes || [];
     const change = changes.find(c => c.name === 'on_hand') || changes[0] || {};
-    const quantity = change.quantityAfterChange ?? parseInt(available);
+    // If there were no changes, quantityAfterChange won't exist because the count stayed the same. 
+    // In that case, the 'available' quantity is just the quantity we asked it to be set to.
+    const quantity = (change.quantityAfterChange ?? parseInt(available)) || 0;
 
     return {
       inventory_level: {

@@ -594,6 +594,58 @@ router.get('/v1/:resource', async (req, res) => {
 });
 
 /**
+ * GET /api/v1/:resource/:id - Dynamic resource fetcher for specific ID
+ */
+router.get('/v1/:resource/:id', async (req, res) => {
+  const { resource, id } = req.params;
+  const scopeMap = {
+    'orders': 'read_orders',
+    'customers': 'read_customers',
+    'products': 'read_products',
+    'inventory': 'read_inventory',
+    'fulfillments': 'read_fulfillments',
+    'fulfillment_orders': 'read_fulfillments',
+    'locations': 'read_locations',
+    'returns': 'read_returns',
+    'discounts': 'read_discounts',
+    'price_rules': 'read_price_rules',
+    'draft_orders': 'read_draft_orders'
+  };
+
+  const requiredScope = scopeMap[resource] || `read_${resource}`;
+  const writeScope = requiredScope.replace('read_', 'write_');
+  const hasPermission = req.scopes && (
+    req.scopes.includes(requiredScope) ||
+    req.scopes.includes(writeScope)
+  );
+
+  if (!hasPermission) {
+    return res.status(403).json({
+      error: 'Insufficient permissions',
+      message: `Your API key lacks the '${requiredScope}' scope required for '${resource}'.`,
+      requiredScope
+    });
+  }
+
+  try {
+    const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+    const singular = resource.replace(/s$/, ''); // e.g. "products" -> "product"
+
+    // Most standard Shopify REST endpoints follow /resource/:id.json
+    const result = await shopify.request('GET', `/${resource}/${id}.json`, req.query);
+
+    res.json({ success: true, resource, data: result });
+  } catch (error) {
+    console.error(`❌ Error fetching ${resource} with id ${id}:`, error.message);
+    res.status(error.response?.status || 500).json({
+      error: `Failed to fetch ${resource}`,
+      message: error.message,
+      shopifyError: error.shopifyMessage
+    });
+  }
+});
+
+/**
  * POST /api/v1/:resource - Create resource
  */
 router.post('/v1/:resource', async (req, res) => {
