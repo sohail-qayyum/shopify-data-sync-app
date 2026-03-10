@@ -150,6 +150,7 @@ class ShopifyAPI {
       return this.updateInventoryLevel(itemId, locationId, available);
     }
     const singular = resource.replace(/s$/, '');
+    // Some endpoints expect the payload exactly as is (like GraphQL abstractions), some expect it wrapped in a root singular key
     const wrappedData = (data && data[singular]) ? data : { [singular]: data };
     return this.request('PUT', `/${resource}/${id}.json`, wrappedData);
   }
@@ -286,7 +287,7 @@ class ShopifyAPI {
           {
             inventoryItemId: itemGid,
             locationId: locationGid,
-            quantity: parseInt(available)
+            quantity: parseInt(available) || 0
           }
         ]
       }
