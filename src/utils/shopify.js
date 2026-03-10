@@ -132,7 +132,7 @@ class ShopifyAPI {
     if (resource === 'inventory') {
       // For inventory, the id in the URL is usually the inventory_item_id
       let itemId = data.inventory_item_id || data.inventory_level?.inventory_item_id || data.id || id;
-      let locationId = data.location_id || data.inventory_level?.location_id;
+      let locationId = data.location_id || data.inventory_level?.location_id || req?.query?.location_id;
       const available = data.available !== undefined ? data.available : data.inventory_level?.available;
 
       // If location_id is missing, auto-fetch and use primary location
