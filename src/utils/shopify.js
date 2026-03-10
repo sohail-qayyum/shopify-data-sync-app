@@ -102,8 +102,8 @@ class ShopifyAPI {
    */
   async createResource(resource, data) {
     if (resource === 'inventory') {
-      let itemId = data.inventory_item_id || data.id;
-      let locationId = data.location_id;
+      let itemId = data.inventory_item_id || data.inventory_level?.inventory_item_id || data.id;
+      let locationId = data.location_id || data.inventory_level?.location_id;
       const available = data.available !== undefined ? data.available : data.inventory_level?.available;
 
       // If location_id is missing, auto-fetch and use primary location
@@ -131,8 +131,8 @@ class ShopifyAPI {
   async updateResource(resource, id, data) {
     if (resource === 'inventory') {
       // For inventory, the id in the URL is usually the inventory_item_id
-      let itemId = data.inventory_item_id || id;
-      let locationId = data.location_id;
+      let itemId = data.inventory_item_id || data.inventory_level?.inventory_item_id || data.id || id;
+      let locationId = data.location_id || data.inventory_level?.location_id;
       const available = data.available !== undefined ? data.available : data.inventory_level?.available;
 
       // If location_id is missing, auto-fetch and use primary location
@@ -263,17 +263,12 @@ class ShopifyAPI {
     const mutation = `
       mutation inventorySetOnHandQuantities($input: InventorySetOnHandQuantitiesInput!) {
         inventorySetOnHandQuantities(input: $input) {
-          inventoryLevels {
-            id
-            quantities(names: ["on_hand"]) {
+          inventoryAdjustmentGroup {
+            changes {
               name
-              quantity
-            }
-            item {
-              id
-            }
-            location {
-              id
+              quantityAfterChange
+              item { id }
+              location { id }
             }
           }
           userErrors {
@@ -307,13 +302,14 @@ class ShopifyAPI {
     }
 
     // Transform back to a structure similar to REST for backward compatibility
-    const level = result.inventorySetOnHandQuantities.inventoryLevels[0];
-    const quantity = level.quantities.find(q => q.name === 'on_hand')?.quantity || 0;
+    const changes = result.inventorySetOnHandQuantities.inventoryAdjustmentGroup?.changes || [];
+    const change = changes.find(c => c.name === 'on_hand') || changes[0] || {};
+    const quantity = change.quantityAfterChange ?? parseInt(available);
 
     return {
       inventory_level: {
-        inventory_item_id: level.item.id.split('/').pop(),
-        location_id: level.location.id.split('/').pop(),
+        inventory_item_id: (change.item?.id || inventoryItemId.toString()).split('/').pop(),
+        location_id: (change.location?.id || locationId.toString()).split('/').pop(),
         available: quantity,
         updated_at: new Date().toISOString()
       }
