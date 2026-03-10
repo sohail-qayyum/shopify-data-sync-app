@@ -320,6 +320,15 @@ class ShopifyAPI {
     };
   }
 
+  /**
+   * Generic Resource Getter (fallback for uncategorized resources)
+   */
+  async getResource(resource, params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = queryString ? `/${resource}.json?${queryString}` : `/${resource}.json`;
+    return this.request('GET', endpoint);
+  }
+
   // Locations
   async getLocations() {
     return this.request('GET', `/locations.json`);

@@ -579,7 +579,10 @@ router.get('/admin', (req, res) => {
                 if (isWrite && !isGraphQLOnly) {
                   endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-post"\u003ePOST\u003c/span\u003e\u003ccode\u003e/' + resource + '\u003c/code\u003e — Create new ' + resource.replace(/_/g, ' ') + '\u003c/div\u003e';
                   endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-put"\u003ePUT\u003c/span\u003e\u003ccode\u003e/' + resource + '/:id\u003c/code\u003e — Update existing ' + resource.replace(/_/g, ' ') + '\u003c/div\u003e';
-                  endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-delete"\u003eDELETE\u003c/span\u003e\u003ccode\u003e/' + resource + '/:id\u003c/code\u003e — Delete ' + resource.replace(/_/g, ' ') + '\u003c/div\u003e';
+                  // Inventory items cannot be deleted via REST API — skip DELETE for inventory
+                  if (resource !== 'inventory') {
+                    endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-delete"\u003eDELETE\u003c/span\u003e\u003ccode\u003e/' + resource + '/:id\u003c/code\u003e — Delete ' + resource.replace(/_/g, ' ') + '\u003c/div\u003e';
+                  }
                   
                   if (resource === 'orders') {
                     endpoints += '\u003cdiv class="endpoint"\u003e\u003cspan class="endpoint-method method-post"\u003ePOST\u003c/span\u003e\u003ccode\u003e/orders/:id/refunds\u003c/code\u003e — Create order refund\u003c/div\u003e';

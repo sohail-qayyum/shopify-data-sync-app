@@ -94,7 +94,7 @@ router.post('/orders-create', async (req, res) => {
 /**
  * POST /webhooks/orders-updated
  */
-router.post('/webhooks/orders-updated', async (req, res) => {
+router.post('/orders-updated', async (req, res) => {
   const order = req.body;
   console.log(`📝 Order updated: ${order.id} for ${req.store.shop_domain}`);
 

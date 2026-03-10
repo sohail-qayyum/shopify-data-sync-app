@@ -289,18 +289,30 @@ router.get('/inventory', requireScope('read_inventory'), async (req, res) => {
  */
 router.post('/inventory/sync', requireScope('write_inventory'), async (req, res) => {
   try {
-    const { inventory_item_id, location_id, available } = req.body;
+    let { inventory_item_id, location_id, available } = req.body;
 
-    if (!inventory_item_id || !location_id || available === undefined) {
+    if (!inventory_item_id || available === undefined) {
       return res.status(400).json({
-        error: 'Missing required fields: inventory_item_id, location_id, available'
+        error: 'Missing required fields: inventory_item_id and available are required'
       });
     }
 
     const shopify = new ShopifyAPI(req.shopDomain, req.accessToken);
+
+    // Auto-fetch primary location if not provided
+    if (!location_id) {
+      const locations = await shopify.getLocations();
+      if (locations && locations.locations && locations.locations.length > 0) {
+        location_id = locations.locations[0].id;
+        console.log('  Auto-selected primary location for sync:', location_id);
+      } else {
+        return res.status(422).json({ error: 'No locations found in Shopify store' });
+      }
+    }
+
     const result = await shopify.updateInventoryLevel(inventory_item_id, location_id, available);
 
-    console.log('✅ Inventory synced:', inventory_item_id);
+    console.log('\u2705 Inventory synced:', inventory_item_id);
 
     await logOperation(req, 'UPDATE', 'inventory', inventory_item_id, 'success', {
       location_id,
@@ -309,11 +321,11 @@ router.post('/inventory/sync', requireScope('write_inventory'), async (req, res)
 
     res.json(result);
   } catch (error) {
-    console.error('❌ Inventory sync failed:', error.message);
+    console.error('\u274c Inventory sync failed:', error.message);
     await logOperation(req, 'UPDATE', 'inventory', req.body.inventory_item_id, 'error', {
       error: error.message
     });
-    res.status(500).json({ error: 'Failed to sync inventory', message: error.message });
+    res.status(500).json({ error: 'Failed to sync inventory', message: error.message, shopifyError: error.shopifyMessage });
   }
 });
 
