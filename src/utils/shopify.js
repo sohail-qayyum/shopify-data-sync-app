@@ -121,7 +121,8 @@ class ShopifyAPI {
       return this.updateInventoryLevel(itemId, locationId, available);
     }
     const singular = resource.replace(/s$/, '');
-    const wrappedData = (data && data[singular]) ? data : { [singular]: data };
+    // If data already has the singular key or is array/primitive, wrap it properly if not already
+    const wrappedData = (data && data[singular] !== undefined) ? data : { [singular]: data };
     return this.request('POST', `/${resource}.json`, wrappedData);
   }
 
@@ -132,7 +133,7 @@ class ShopifyAPI {
     if (resource === 'inventory') {
       // For inventory, the id in the URL is usually the inventory_item_id
       let itemId = data.inventory_item_id || data.inventory_level?.inventory_item_id || data.id || id;
-      let locationId = data.location_id || data.inventory_level?.location_id || req?.query?.location_id;
+      let locationId = data.location_id || data.inventory_level?.location_id || (data.query ? data.query.location_id : undefined);
       const available = data.available !== undefined ? data.available : data.inventory_level?.available;
 
       // If location_id is missing, auto-fetch and use primary location
@@ -151,7 +152,7 @@ class ShopifyAPI {
     }
     const singular = resource.replace(/s$/, '');
     // Some endpoints expect the payload exactly as is (like GraphQL abstractions), some expect it wrapped in a root singular key
-    const wrappedData = (data && data[singular]) ? data : { [singular]: data };
+    const wrappedData = (data && data[singular] !== undefined) ? data : { [singular]: data };
     return this.request('PUT', `/${resource}/${id}.json`, wrappedData);
   }
 
